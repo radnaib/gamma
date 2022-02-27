@@ -13,7 +13,7 @@
                     label="Generate Gamma Statechart" style="push">
                     <visibleWhen checkEnabled="false">
                         <iterate ifEmpty="false" operator="or">
-                            <test property="org.eclipse.core.resources.name" value="*.gcd">
+                            <test property="org.eclipse.core.resources.name" value="*.scxml">
                             </test>
                         </iterate>
                     </visibleWhen>
@@ -27,7 +27,7 @@
                     label="Generate Gamma Statechart" style="push">
                     <visibleWhen checkEnabled="false">
                         <iterate ifEmpty="false" operator="or">
-                            <test property="org.eclipse.core.resources.name" value="*.gcd">
+                            <test property="org.eclipse.core.resources.name" value="*.scxml">
                             </test>
                         </iterate>
                     </visibleWhen>
