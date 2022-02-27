@@ -1,0 +1,14 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: SCXML To Gamma Transformation
+Bundle-SymbolicName: hu.bme.mit.gamma.scxml.transformation;singleton:=true
+Bundle-Version: 1.0.0.qualifier
+Automatic-Module-Name: hu.bme.mit.gamma.scxml.transformation
+Bundle-RequiredExecutionEnvironment: JavaSE-11
+Require-Bundle: ac.soton.scxml,
+ hu.bme.mit.gamma.statechart.model,
+ com.google.guava,
+ org.eclipse.xtext.xbase.lib,
+ org.eclipse.xtend.lib,
+ org.eclipse.xtend.lib.macro
+Export-Package: hu.bme.mit.gamma.scxml.transformation
