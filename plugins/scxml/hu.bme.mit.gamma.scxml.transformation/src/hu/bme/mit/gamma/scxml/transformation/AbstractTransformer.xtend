@@ -1,5 +1,6 @@
 package hu.bme.mit.gamma.scxml.transformation
 
+import hu.bme.mit.gamma.scxml.transformation.parse.ConditionalLanguageParser
 import hu.bme.mit.gamma.statechart.interface_.InterfaceModelFactory
 import hu.bme.mit.gamma.statechart.statechart.StatechartModelFactory
 import hu.bme.mit.gamma.statechart.util.StatechartUtil
@@ -15,6 +16,8 @@ abstract class AbstractTransformer {
 	
 	protected final extension InterfaceModelFactory interfaceModelFactory = InterfaceModelFactory.eINSTANCE
 	protected final extension StatechartModelFactory statechartModelFactory = StatechartModelFactory.eINSTANCE
+	
+	protected final ConditionalLanguageParser conditionalLanguageParser = new ConditionalLanguageParser()
 	
 	protected final Logger logger = Logger.getLogger("GammaLogger")
 	

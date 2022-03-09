@@ -3,13 +3,16 @@ package hu.bme.mit.gamma.scxml.transformation
 import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
+import ac.soton.scxml.ScxmlTransitionType
+
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
+import hu.bme.mit.gamma.statechart.statechart.Transition
+
 import java.util.logging.Level
 
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
-import hu.bme.mit.gamma.statechart.statechart.Transition
-import ac.soton.scxml.ScxmlTransitionType
+import java.util.HashMap
 
 class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	
@@ -50,9 +53,8 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 				val parallel = stateNode as ScxmlParallelType
 				mainRegion.stateNodes += parallel.transformParallel
 			}
-			else if (isState(stateNode)) {
-				val state = stateNode as ScxmlStateType
-				mainRegion.stateNodes += state.transformState
+			else if (stateNode instanceof ScxmlStateType) {
+				mainRegion.stateNodes += stateNode.transformState
 			}
 			else if (isFinal(stateNode)) { // TODO
 				/*val final = stateNode as ScxmlFinalType
@@ -66,7 +68,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		
 		val transitions = getAllTransitions(scxmlRoot)
 		for (transition : transitions) {
-			// TODO gammaStatechart.transitions += transition.transform
+			transition.transform
 		}
 		
 		return traceability
@@ -155,16 +157,27 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		val sourceId = getParentStateNodeId(transition)
 		val targetId = transition.target.head
 		
-		val gammaSource = traceability.getStateById(sourceId)
-		val gammaTarget = traceability.getStateById(targetId)
+		if (sourceId !== null) {
+			val gammaSource = traceability.getStateById(sourceId)
+			val gammaTarget = traceability.getStateById(targetId)
+			
+			logger.log(Level.INFO, "Transforming transition" + sourceId + " -> " + targetId)
+			
+			val gammaTransition = gammaSource.createTransition(gammaTarget)
+			
+			val guardStr = transition.cond
+			if (guardStr !== null) {
+				val gammaGuardExpression = conditionalLanguageParser
+											.parse(guardStr, new HashMap)
+				gammaTransition.guard = gammaGuardExpression
+			}
+			
+			traceability.put(transition, gammaTransition)
+			
+			return gammaTransition
+		}
 		
-		logger.log(Level.INFO, "Transforming transition" + sourceId + " -> " + targetId)
-		
-		val gammaTransition = gammaSource.createTransition(gammaTarget)
-		
-		traceability.put(transition, gammaTransition)
-		
-		return gammaTransition
+		return null
 	}
 	
 }
