@@ -11,6 +11,7 @@ import hu.bme.mit.gamma.util.GammaEcoreUtil
 import java.util.Map
 
 import static com.google.common.base.Preconditions.checkNotNull
+import ac.soton.scxml.ScxmlFinalType
 
 class Traceability {
 	
@@ -23,11 +24,12 @@ class Traceability {
 	protected final Map<ScxmlScxmlType, SynchronousStatechartDefinition> statechartDefinitions = newHashMap
 	protected final Map<ScxmlParallelType, State> parallels = newHashMap
 	protected final Map<ScxmlStateType, State> states = newHashMap
+	protected final Map<ScxmlFinalType, State> finals = newHashMap
 	protected final Map<ScxmlTransitionType, Transition> transitions = newHashMap
 	
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
 	
-	//
+	// <scxml> - Synchronous Statechart Definition
 	
 	new(ScxmlScxmlType scxmlRoot) {
 		this.scxmlRoot = scxmlRoot
@@ -50,7 +52,7 @@ class Traceability {
 		return gammaStatechart
 	}
 	
-	//
+	// <parallel> - State (with orthogonal Regions)
 	
 	def put(ScxmlParallelType scxmlParallel, State gammaParallel) {
 		checkNotNull(scxmlParallel)
@@ -73,7 +75,7 @@ class Traceability {
 		return getState(scxmlParallel)
 	}
 	
-	//
+	// <state> - State
 	
 	def put(ScxmlStateType scxmlState, State gammaState) {
 		checkNotNull(scxmlState)
@@ -96,7 +98,30 @@ class Traceability {
 		return getState(scxmlState)
 	}
 	
-	//
+	// <final> - State
+	
+	def put(ScxmlFinalType scxmlFinal, State gammaFinal) {
+		checkNotNull(scxmlFinal)
+		checkNotNull(gammaFinal)
+		finals += scxmlFinal -> gammaFinal
+	}
+	
+	def getFinalState(ScxmlFinalType scxmlFinal) {
+		checkNotNull(scxmlFinal)
+		val gammaFinal = finals.get(scxmlFinal)
+		checkNotNull(gammaFinal)
+		return gammaFinal
+	}
+	
+	def getFinalById(String scxmlFinalId) {
+		checkNotNull(scxmlFinalId)
+		val keySet = finals.keySet
+		val scxmlFinal = keySet.findFirst[final | final.id == scxmlFinalId]
+		checkNotNull(scxmlFinal)
+		return getFinalState(scxmlFinal)
+	}
+	
+	// <transition> - Transition
 	
 	def put(ScxmlTransitionType scxmlTransition, Transition gammaTransition) {
 		checkNotNull(scxmlTransition)

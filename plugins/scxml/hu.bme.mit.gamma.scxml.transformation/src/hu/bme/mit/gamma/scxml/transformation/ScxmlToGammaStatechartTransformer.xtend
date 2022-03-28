@@ -4,15 +4,15 @@ import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
-
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
-
+import java.util.HashMap
 import java.util.logging.Level
 
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
-import java.util.HashMap
+import static hu.bme.mit.gamma.scxml.transformation.Namings.*
+import ac.soton.scxml.ScxmlFinalType
 
 class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	
@@ -33,7 +33,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		
 		this.scxmlRoot = scxmlRoot
 		this.gammaStatechart = createSynchronousStatechartDefinition => [
-			it.name = scxmlRoot.name
+			it.name = getStatechartName(scxmlRoot)
 		]
 	}
 	
@@ -43,7 +43,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		logger.log(Level.INFO, "Transforming <scxml> root element (" + scxmlRoot.name + ")")
 		
 		val mainRegion = createRegion => [
-			it.name = scxmlRoot.name
+			it.name = getRegionName(scxmlRoot.name)
 		]
 		gammaStatechart.regions += mainRegion
 		
@@ -56,9 +56,9 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			else if (stateNode instanceof ScxmlStateType) {
 				mainRegion.stateNodes += stateNode.transformState
 			}
-			else if (isFinal(stateNode)) { // TODO
-				/*val final = stateNode as ScxmlFinalType
-				mainRegion.stateNodes += final.transformFinal*/
+			else if (isFinal(stateNode)) {
+				val final = stateNode as ScxmlFinalType
+				mainRegion.stateNodes += final.transformFinal
 			}
 			else {
 				throw new IllegalArgumentException(
@@ -74,18 +74,18 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		return traceability
 	}
 	
-	def State transformParallel(ScxmlParallelType parallelNode) {
+	protected def State transformParallel(ScxmlParallelType parallelNode) {
 		logger.log(Level.INFO, "Transforming <parallel> element (" + parallelNode.id + ")")
 		
 		val gammaParallel = createState => [
-			it.name = parallelNode.id
+			it.name = getParallelName(parallelNode)
 		]
 		
 		val stateNodes = getStateNodes(parallelNode)
 		
 		for (stateNode : stateNodes) {
 			val region = createRegion => [
-				it.name = gammaParallel.name + "Region" // TODO
+				it.name = getRegionName(gammaParallel.name)
 			]
 			gammaParallel.regions += region
 			
@@ -97,9 +97,9 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 				val state = stateNode as ScxmlStateType
 				region.stateNodes += state.transformState
 			}
-			else if (isFinal(stateNode)) {	// TODO
-				/*val final = stateNode as ScxmlFinalType
-				region.stateNodes += final.transformFinal*/
+			else if (isFinal(stateNode)) {
+				val final = stateNode as ScxmlFinalType
+				region.stateNodes += final.transformFinal
 			}
 			else {
 				throw new IllegalArgumentException(
@@ -112,16 +112,16 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		return gammaParallel
 	}
 	
-	def State transformState(ScxmlStateType scxmlState) {
+	protected def State transformState(ScxmlStateType scxmlState) {
 		logger.log(Level.INFO, "Transforming <state> element (" + scxmlState.id + ")")
 		
 		val gammaState = createState => [
-			it.name = scxmlState.id
+			it.name = getStateName(scxmlState)
 		]
 		
 		if (isCompoundState(scxmlState)) {
 			val region = createRegion => [
-				it.name = gammaState.name + "Region" // TODO
+				it.name = getRegionName(gammaState.name)
 			]
 			gammaState.regions += region
 				
@@ -136,9 +136,9 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 					val state = stateNode as ScxmlStateType
 					region.stateNodes += state.transformState
 				}
-				else if (isFinal(stateNode)) {	// TODO
-					/*val final = stateNode as ScxmlFinalType
-					region.stateNodes += final.transformFinal*/
+				else if (isFinal(stateNode)) {
+					val final = stateNode as ScxmlFinalType
+					region.stateNodes += final.transformFinal
 				}
 				else {
 					throw new IllegalArgumentException(
@@ -150,6 +150,18 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		traceability.put(scxmlState, gammaState)
 		
 		return gammaState
+	}
+	
+	protected def State transformFinal(ScxmlFinalType scxmlFinal) {
+		logger.log(Level.INFO, "Transforming <final> element (" + scxmlFinal.id + ")")
+		
+		val gammaFinal = createState => [
+			it.name = getFinalName(scxmlFinal)
+		]
+		
+		traceability.put(scxmlFinal, gammaFinal)
+		
+		return gammaFinal
 	}
 	
 	protected def Transition transform(ScxmlTransitionType transition) {
