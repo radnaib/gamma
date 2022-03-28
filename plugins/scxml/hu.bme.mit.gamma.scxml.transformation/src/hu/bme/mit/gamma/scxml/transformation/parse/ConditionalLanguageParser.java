@@ -10,6 +10,8 @@ import org.eclipse.xtext.parser.IParseResult;
 
 import com.google.inject.Injector;
 
+import hu.bme.mit.gamma.expression.language.ExpressionLanguageStandaloneSetup;
+import hu.bme.mit.gamma.expression.language.parser.antlr.ExpressionLanguageParser;
 import hu.bme.mit.gamma.expression.model.Declaration;
 import hu.bme.mit.gamma.expression.model.DirectReferenceExpression;
 import hu.bme.mit.gamma.expression.model.Expression;
@@ -20,11 +22,13 @@ public class ConditionalLanguageParser {
 	
 	ExpressionModelFactory expressionModelFactory = ExpressionModelFactory.eINSTANCE;
 	
-	private Injector injector = new CustomLanguageStandaloneSetup()
-							.createInjectorAndDoEMFRegistration();
+	//private Injector injector = new CustomLanguageStandaloneSetup()
+	//						.createInjectorAndDoEMFRegistration();
+	private Injector injector = new ExpressionLanguageStandaloneSetup()
+			.createInjectorAndDoEMFRegistration();
 	
 	public Expression parse(String expression, Map<String, Declaration> scope) {
-		 CustomLanguageParser parser = injector.getInstance(CustomLanguageParser.class);
+		CustomLanguageParser parser = injector.getInstance(CustomLanguageParser.class);
 		 StringReader reader = new StringReader(expression);
 		 IParseResult result = parser.parse(reader);
 		 
