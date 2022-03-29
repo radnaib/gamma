@@ -1,157 +1,218 @@
 package hu.bme.mit.gamma.scxml.transformation
 
 import ac.soton.scxml.ScxmlFinalType
+import ac.soton.scxml.ScxmlHistoryType
 import ac.soton.scxml.ScxmlInitialType
 import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
+import hu.bme.mit.gamma.statechart.statechart.EntryState
 import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import java.util.Map
+import org.eclipse.emf.ecore.EObject
 
 import static com.google.common.base.Preconditions.checkNotNull
+import hu.bme.mit.gamma.statechart.statechart.StateNode
 
 class Traceability {
-	
+
 	// Root element of the SCXML statechart model to transform.
-	// This Traceability class will be able to store multiple
+	// This Traceability class could be able to store multiple
 	// ScxmlScxmlType - SynchronousStatechartDefinition pairs, but for now,
 	// we assume only one SCMXL statechart to be transformed (from an <scxml> root element).
 	protected final ScxmlScxmlType scxmlRoot
-	
+
 	protected final Map<ScxmlScxmlType, SynchronousStatechartDefinition> statechartDefinitions = newHashMap
 	protected final Map<ScxmlParallelType, State> parallels = newHashMap
 	protected final Map<ScxmlStateType, State> states = newHashMap
 	protected final Map<ScxmlFinalType, State> finals = newHashMap
 	protected final Map<ScxmlInitialType, InitialState> initials = newHashMap
+	protected final Map<ScxmlHistoryType, EntryState> historyStates = newHashMap
 	protected final Map<ScxmlTransitionType, Transition> transitions = newHashMap
-	
+
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
-	
+
 	// <scxml> - Synchronous Statechart Definition
-	
 	new(ScxmlScxmlType scxmlRoot) {
 		this.scxmlRoot = scxmlRoot
 	}
-	
+
 	def getScxmlRoot() {
 		return scxmlRoot
 	}
-	
+
 	def put(ScxmlScxmlType scxmlRoot, SynchronousStatechartDefinition gammaStatechart) {
 		checkNotNull(scxmlRoot)
 		checkNotNull(gammaStatechart)
 		statechartDefinitions += scxmlRoot -> gammaStatechart
 	}
-	
+
 	def getStatechartDefinition(ScxmlScxmlType scxmlRoot) {
 		checkNotNull(scxmlRoot)
 		val gammaStatechart = statechartDefinitions.get(scxmlRoot)
 		checkNotNull(gammaStatechart)
 		return gammaStatechart
 	}
-	
+
 	// <parallel> - State (with orthogonal Region children)
-	
 	def put(ScxmlParallelType scxmlParallel, State gammaParallel) {
 		checkNotNull(scxmlParallel)
 		checkNotNull(gammaParallel)
 		parallels += scxmlParallel -> gammaParallel
 	}
-	
+
 	def getParallel(ScxmlParallelType scxmlParallel) {
 		checkNotNull(scxmlParallel)
 		val gammaParallel = parallels.get(scxmlParallel)
 		checkNotNull(gammaParallel)
 		return gammaParallel
 	}
-	
+
 	def getParallelById(String scxmlParallelId) {
 		checkNotNull(scxmlParallelId)
 		val keySet = states.keySet
-		val scxmlParallel = keySet.findFirst[parallel | parallel.id == scxmlParallelId]
+		val scxmlParallel = keySet.findFirst[parallel|parallel.id == scxmlParallelId]
 		checkNotNull(scxmlParallel)
 		return getState(scxmlParallel)
 	}
-	
+
 	// <state> - State (with a Region child if it is compound)
-	
 	def put(ScxmlStateType scxmlState, State gammaState) {
 		checkNotNull(scxmlState)
 		checkNotNull(gammaState)
 		states += scxmlState -> gammaState
 	}
-	
+
 	def getState(ScxmlStateType scxmlState) {
 		checkNotNull(scxmlState)
 		val gammaState = states.get(scxmlState)
 		checkNotNull(gammaState)
 		return gammaState
 	}
-	
+
 	def getStateById(String scxmlStateId) {
 		checkNotNull(scxmlStateId)
 		val keySet = states.keySet
-		val scxmlState = keySet.findFirst[state | state.id == scxmlStateId]
+		val scxmlState = keySet.findFirst[state|state.id == scxmlStateId]
 		checkNotNull(scxmlState)
 		return getState(scxmlState)
 	}
-	
+
 	// <final> - State
-	
 	def put(ScxmlFinalType scxmlFinal, State gammaFinal) {
 		checkNotNull(scxmlFinal)
 		checkNotNull(gammaFinal)
 		finals += scxmlFinal -> gammaFinal
 	}
-	
+
 	def getFinalState(ScxmlFinalType scxmlFinal) {
 		checkNotNull(scxmlFinal)
 		val gammaFinal = finals.get(scxmlFinal)
 		checkNotNull(gammaFinal)
 		return gammaFinal
 	}
-	
+
 	def getFinalById(String scxmlFinalId) {
 		checkNotNull(scxmlFinalId)
 		val keySet = finals.keySet
-		val scxmlFinal = keySet.findFirst[final | final.id == scxmlFinalId]
+		val scxmlFinal = keySet.findFirst[final|final.id == scxmlFinalId]
 		checkNotNull(scxmlFinal)
 		return getFinalState(scxmlFinal)
 	}
-	
+
 	// <initial> - InitialState
-	
 	def put(ScxmlInitialType scxmlInitial, InitialState gammaInitial) {
 		checkNotNull(scxmlInitial)
 		checkNotNull(gammaInitial)
 		initials += scxmlInitial -> gammaInitial
 	}
-	
+
 	def getInitialState(ScxmlInitialType scxmlInitial) {
 		checkNotNull(scxmlInitial)
 		val gammaInitial = initials.get(scxmlInitial)
 		checkNotNull(gammaInitial)
 		return gammaInitial
 	}
+
+	// <history> - ShallowHistoryState or DeepHistoryState (stored as an EntryState)
+	def put(ScxmlHistoryType scxmlHistory, EntryState gammaHistory) {
+		checkNotNull(scxmlHistory)
+		checkNotNull(gammaHistory)
+		historyStates += scxmlHistory -> gammaHistory
+	}
+
+	def getHistoryState(ScxmlHistoryType scxmlHistory) {
+		checkNotNull(scxmlHistory)
+		val gammaHistory = historyStates.get(scxmlHistory)
+		checkNotNull(gammaHistory)
+		return gammaHistory
+	}
+
+	def getHistoryStateById(String scxmlHistoryId) {
+		checkNotNull(scxmlHistoryId)
+		val keySet = historyStates.keySet
+		val scxmlHistory = keySet.findFirst[history|history.id == scxmlHistoryId]
+		checkNotNull(scxmlHistory)
+		return getHistoryState(scxmlHistory)
+	}
+
+	// General functions returning a mapped Gamma StateNode
+	// Retrieves the mapped Gamma StateNode for an arbitrary transition source state
+	def getStateNode(EObject scxmlStateNode) {
+		val gammaState = states.get(scxmlStateNode)
+		if (gammaState !== null) {
+			return gammaState as StateNode;
+		}
+		val gammaParallel = parallels.get(scxmlStateNode)
+		if (gammaParallel !== null) {
+			return gammaParallel as StateNode;
+		}
+		val gammaInitial = initials.get(scxmlStateNode)
+		if (gammaInitial !== null) {
+			return gammaInitial as StateNode;
+		}
+		val gammaHistory = historyStates.get(scxmlStateNode)
+		checkNotNull(gammaHistory);
+		return gammaHistory as StateNode;
+	}
 	
+	// Retrieves the mapped Gamma StateNode for an arbitrary transition target state id
+	def getStateNodeById(String scxmlStateNodeId) {
+		val gammaState = states.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
+		if (gammaState !== null) {
+			return gammaState
+		}
+		val gammaParallel = parallels.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
+		if (gammaParallel !== null) {
+			return gammaParallel;
+		}
+		val gammaFinal = finals.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
+		if (gammaFinal !== null) {
+			return gammaFinal;
+		}
+		val gammaHistory = historyStates.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
+		checkNotNull(gammaHistory);
+		return gammaHistory;
+
+	}
+
 	// <transition> - Transition
-	
 	def put(ScxmlTransitionType scxmlTransition, Transition gammaTransition) {
 		checkNotNull(scxmlTransition)
 		checkNotNull(gammaTransition)
 		transitions += scxmlTransition -> gammaTransition
 	}
-	
+
 	def getTransition(ScxmlTransitionType scxmlTransition) {
 		checkNotNull(scxmlTransition)
 		val gammaTransition = transitions.get(scxmlTransition)
 		checkNotNull(gammaTransition)
 		return gammaTransition
 	}
-	
+
 }

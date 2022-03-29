@@ -1,11 +1,14 @@
 package hu.bme.mit.gamma.scxml.transformation
 
+import ac.soton.scxml.HistoryTypeDatatype
 import ac.soton.scxml.ScxmlFinalType
+import ac.soton.scxml.ScxmlHistoryType
 import ac.soton.scxml.ScxmlInitialType
 import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
+import hu.bme.mit.gamma.statechart.statechart.EntryState
 import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
@@ -16,7 +19,6 @@ import java.util.logging.Level
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
 
-// TODO Transform not only the first transition in a target state specification, but all of them.
 class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	
 	// Root element of the SCXML statechart model to transform
@@ -85,7 +87,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		val scxmlInitialAttribute = scxmlRoot.initial
 		val scxmlFirstInitialAttribute = scxmlInitialAttribute?.head
 		if (scxmlFirstInitialAttribute !== null) {
-			val gammaInitialTarget = traceability.getStateById(scxmlFirstInitialAttribute)
+			val gammaInitialTarget = traceability.getStateNodeById(scxmlFirstInitialAttribute)
 			gammaInitial.createTransition(gammaInitialTarget)
 		}
 		else {
@@ -105,7 +107,6 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		]
 		
 		val scxmlStateNodes = getStateNodes(parallelNode)
-		
 		for (scxmlStateNode : scxmlStateNodes) {
 			val region = createRegion => [
 				it.name = getRegionName(gammaParallel.name)
@@ -130,6 +131,12 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			}
 		}
 		
+		// TODO Transform history pseudo-states (by adding a wrapper compound state perhaps)
+		/*val scxmlHistoryStates = parallelNode.history
+		for (scxmlHistoryState : scxmlHistoryStates) {
+			
+		}*/
+		
 		traceability.put(parallelNode, gammaParallel)
 		
 		return gammaParallel
@@ -149,7 +156,6 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			gammaState.regions += region
 				
 			val scxmlStateNodes = getStateNodes(scxmlState)
-			
 			for (scxmlStateNode : scxmlStateNodes) {
 				if (isParallel(scxmlStateNode)) {
 					val parallel = scxmlStateNode as ScxmlParallelType
@@ -173,7 +179,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			// or select its first child as initial state if neither one above is present.
 			val scxmlInitialElement = scxmlState.initial.head
 			if (scxmlInitialElement !== null) {
-				region.stateNodes += scxmlInitialElement.transformInitial
+				region.stateNodes += scxmlInitialElement.transform
 			}
 			else {
 				val gammaInitial = createInitialState => [
@@ -183,7 +189,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 				
 				val scxmlInitialAttribute = scxmlState.initial1.head
 				if (scxmlInitialAttribute !== null) {
-					val gammaInitialTarget = traceability.getStateById(scxmlInitialAttribute)
+					val gammaInitialTarget = traceability.getStateNodeById(scxmlInitialAttribute)
 					gammaInitial.createTransition(gammaInitialTarget)
 				}
 				else {
@@ -191,6 +197,12 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 					val gammaInitialTarget = traceability.getState(firstScxmlStateChild)
 					gammaInitial.createTransition(gammaInitialTarget)
 				}
+			}
+			
+			// Transform history pseudo-states
+			val scxmlHistoryStates = scxmlState.history
+			for (scxmlHistoryState : scxmlHistoryStates) {
+				region.stateNodes += scxmlHistoryState.transform
 			}
 		}		
 		
@@ -211,7 +223,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		return gammaFinal
 	}
 	
-	protected def InitialState transformInitial(ScxmlInitialType scxmlInitial) {
+	protected def InitialState transform(ScxmlInitialType scxmlInitial) {
 		logger.log(Level.INFO, "Transforming <initial> element")
 		
 		val parentState = getParentState(scxmlInitial)
@@ -224,32 +236,47 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		return gammaInitial
 	}
 	
+	protected def EntryState transform(ScxmlHistoryType scxmlHistory) {
+		logger.log(Level.INFO, "Transforming <history> element (" + scxmlHistory.id + ")")
+		
+		if (scxmlHistory.type == HistoryTypeDatatype.SHALLOW) {
+			val gammaShallowHistory = createShallowHistoryState => [
+				it.name = getShallowHistoryName(scxmlHistory)
+			]
+			
+			traceability.put(scxmlHistory, gammaShallowHistory)
+			return gammaShallowHistory
+		}
+		else {
+			val gammaDeepHistory = createDeepHistoryState => [
+				it.name = getDeepHistoryName(scxmlHistory)
+			]
+			
+			traceability.put(scxmlHistory, gammaDeepHistory)
+			return gammaDeepHistory
+		}
+	}
+	
 	protected def Transition transformTransition(ScxmlTransitionType transition) {
-		// TODO For now, only ScxmlStateType is considered as a type of transition source.
-		val sourceId = getParentStateNodeId(transition)
+		val sourceState = getTransitionSource(transition)
 		val targetId = transition.target.head
 		
-		if (sourceId !== null) {
-			val gammaSource = traceability.getStateById(sourceId)
-			val gammaTarget = traceability.getStateById(targetId)
-			
-			logger.log(Level.INFO, "Transforming transition" + sourceId + " -> " + targetId)
-			
-			val gammaTransition = gammaSource.createTransition(gammaTarget)
-			
-			val guardStr = transition.cond
-			if (guardStr !== null) {
-				val gammaGuardExpression = conditionalLanguageParser
-											.parse(guardStr, new HashMap)
-				gammaTransition.guard = gammaGuardExpression
-			}
-			
-			traceability.put(transition, gammaTransition)
-			
-			return gammaTransition
+		val gammaSource = traceability.getStateNode(sourceState)
+		val gammaTarget = traceability.getStateNodeById(targetId)
+
+		logger.log(Level.INFO, "Transforming transition" + gammaSource.name + " -> " + gammaTarget.name)
+
+		val gammaTransition = gammaSource.createTransition(gammaTarget)
+
+		val guardStr = transition.cond
+		if (guardStr !== null) {
+			val gammaGuardExpression = conditionalLanguageParser.parse(guardStr, new HashMap)
+			gammaTransition.guard = gammaGuardExpression
 		}
-		
-		return null
+
+		traceability.put(transition, gammaTransition)
+			
+		return gammaTransition
 	}
 	
 }

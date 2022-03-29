@@ -1,6 +1,7 @@
 package hu.bme.mit.gamma.scxml.transformation
 
 import ac.soton.scxml.ScxmlFinalType
+import ac.soton.scxml.ScxmlHistoryType
 import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
@@ -14,5 +15,7 @@ class Namings {
 	def static String getFinalName(ScxmlFinalType scxmlFinal) '''«scxmlFinal.id»'''
 	def static String getInitialName(ScxmlStateType scxmlParentState) '''«scxmlParentState.id»Initial'''
 	def static String getInitialName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»Initial'''
+	def static String getShallowHistoryName(ScxmlHistoryType scxmlHistoryState) '''«scxmlHistoryState.id»ShallowHistory'''
+	def static String getDeepHistoryName(ScxmlHistoryType scxmlHistoryState) '''«scxmlHistoryState.id»DeepHistory'''
 	
 }
