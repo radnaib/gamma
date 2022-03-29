@@ -12,5 +12,7 @@ class Namings {
 	def static String getParallelName(ScxmlParallelType scxmlParallel) '''«scxmlParallel.id»'''
 	def static String getStateName(ScxmlStateType scxmlState) '''«scxmlState.id»'''
 	def static String getFinalName(ScxmlFinalType scxmlFinal) '''«scxmlFinal.id»'''
+	def static String getInitialName(ScxmlStateType scxmlParentState) '''«scxmlParentState.id»Initial'''
+	def static String getInitialName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»Initial'''
 	
 }

@@ -1,9 +1,12 @@
 package hu.bme.mit.gamma.scxml.transformation
 
+import ac.soton.scxml.ScxmlFinalType
+import ac.soton.scxml.ScxmlInitialType
 import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
+import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
@@ -11,7 +14,6 @@ import hu.bme.mit.gamma.util.GammaEcoreUtil
 import java.util.Map
 
 import static com.google.common.base.Preconditions.checkNotNull
-import ac.soton.scxml.ScxmlFinalType
 
 class Traceability {
 	
@@ -25,6 +27,7 @@ class Traceability {
 	protected final Map<ScxmlParallelType, State> parallels = newHashMap
 	protected final Map<ScxmlStateType, State> states = newHashMap
 	protected final Map<ScxmlFinalType, State> finals = newHashMap
+	protected final Map<ScxmlInitialType, InitialState> initials = newHashMap
 	protected final Map<ScxmlTransitionType, Transition> transitions = newHashMap
 	
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
@@ -52,7 +55,7 @@ class Traceability {
 		return gammaStatechart
 	}
 	
-	// <parallel> - State (with orthogonal Regions)
+	// <parallel> - State (with orthogonal Region children)
 	
 	def put(ScxmlParallelType scxmlParallel, State gammaParallel) {
 		checkNotNull(scxmlParallel)
@@ -75,7 +78,7 @@ class Traceability {
 		return getState(scxmlParallel)
 	}
 	
-	// <state> - State
+	// <state> - State (with a Region child if it is compound)
 	
 	def put(ScxmlStateType scxmlState, State gammaState) {
 		checkNotNull(scxmlState)
@@ -119,6 +122,21 @@ class Traceability {
 		val scxmlFinal = keySet.findFirst[final | final.id == scxmlFinalId]
 		checkNotNull(scxmlFinal)
 		return getFinalState(scxmlFinal)
+	}
+	
+	// <initial> - InitialState
+	
+	def put(ScxmlInitialType scxmlInitial, InitialState gammaInitial) {
+		checkNotNull(scxmlInitial)
+		checkNotNull(gammaInitial)
+		initials += scxmlInitial -> gammaInitial
+	}
+	
+	def getInitialState(ScxmlInitialType scxmlInitial) {
+		checkNotNull(scxmlInitial)
+		val gammaInitial = initials.get(scxmlInitial)
+		checkNotNull(gammaInitial)
+		return gammaInitial
 	}
 	
 	// <transition> - Transition

@@ -1,9 +1,12 @@
 package hu.bme.mit.gamma.scxml.transformation
 
+import ac.soton.scxml.ScxmlFinalType
+import ac.soton.scxml.ScxmlInitialType
 import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
+import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
@@ -12,8 +15,8 @@ import java.util.logging.Level
 
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
-import ac.soton.scxml.ScxmlFinalType
 
+// TODO Transform not only the first transition in a target state specification, but all of them.
 class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	
 	// Root element of the SCXML statechart model to transform
@@ -37,6 +40,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		]
 	}
 	
+	// Transformation of the SCXML root element and its contents recursively
 	def execute() {
 		traceability.put(scxmlRoot, gammaStatechart)
 		
@@ -47,28 +51,47 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		]
 		gammaStatechart.regions += mainRegion
 		
-		val stateNodes = getStateNodes(scxmlRoot)
-		for (stateNode : stateNodes) {
-			if (isParallel(stateNode)) {
-				val parallel = stateNode as ScxmlParallelType
+		val scxmlStateNodes = getStateNodes(scxmlRoot)
+		for (scxmlStateNode : scxmlStateNodes) {
+			if (isParallel(scxmlStateNode)) {
+				val parallel = scxmlStateNode as ScxmlParallelType
 				mainRegion.stateNodes += parallel.transformParallel
 			}
-			else if (stateNode instanceof ScxmlStateType) {
-				mainRegion.stateNodes += stateNode.transformState
+			else if (scxmlStateNode instanceof ScxmlStateType) {
+				mainRegion.stateNodes += scxmlStateNode.transformState
 			}
-			else if (isFinal(stateNode)) {
-				val final = stateNode as ScxmlFinalType
+			else if (isFinal(scxmlStateNode)) {
+				val final = scxmlStateNode as ScxmlFinalType
 				mainRegion.stateNodes += final.transformFinal
 			}
 			else {
 				throw new IllegalArgumentException(
-					"Object " + stateNode + " is of unknown SCXML <state> type.")
+					"Object " + scxmlStateNode + " is of unknown SCXML <state> type.")
 			}
 		}
 		
 		val transitions = getAllTransitions(scxmlRoot)
 		for (transition : transitions) {
-			transition.transform
+			transition.transformTransition
+		}
+		
+		// Transform the SCXML root element's initial attribute,
+		// or select its first child as initial state if it is not present.
+		val gammaInitial = createInitialState => [
+			it.name = getInitialName(scxmlRoot)
+		]
+		mainRegion.stateNodes += gammaInitial	
+		
+		val scxmlInitialAttribute = scxmlRoot.initial
+		val scxmlFirstInitialAttribute = scxmlInitialAttribute?.head
+		if (scxmlFirstInitialAttribute !== null) {
+			val gammaInitialTarget = traceability.getStateById(scxmlFirstInitialAttribute)
+			gammaInitial.createTransition(gammaInitialTarget)
+		}
+		else {
+			val firstScxmlStateChild = getFirstChildStateNode(scxmlRoot) as ScxmlStateType
+			val gammaInitialTarget = traceability.getState(firstScxmlStateChild)
+			gammaInitial.createTransition(gammaInitialTarget)
 		}
 		
 		return traceability
@@ -81,29 +104,29 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			it.name = getParallelName(parallelNode)
 		]
 		
-		val stateNodes = getStateNodes(parallelNode)
+		val scxmlStateNodes = getStateNodes(parallelNode)
 		
-		for (stateNode : stateNodes) {
+		for (scxmlStateNode : scxmlStateNodes) {
 			val region = createRegion => [
 				it.name = getRegionName(gammaParallel.name)
 			]
 			gammaParallel.regions += region
 			
-			if (isParallel(stateNode)) {
-				val parallel = stateNode as ScxmlParallelType
+			if (isParallel(scxmlStateNode)) {
+				val parallel = scxmlStateNode as ScxmlParallelType
 				region.stateNodes += parallel.transformParallel
 			}
-			else if (isState(stateNode)) {
-				val state = stateNode as ScxmlStateType
+			else if (isState(scxmlStateNode)) {
+				val state = scxmlStateNode as ScxmlStateType
 				region.stateNodes += state.transformState
 			}
-			else if (isFinal(stateNode)) {
-				val final = stateNode as ScxmlFinalType
+			else if (isFinal(scxmlStateNode)) {
+				val final = scxmlStateNode as ScxmlFinalType
 				region.stateNodes += final.transformFinal
 			}
 			else {
 				throw new IllegalArgumentException(
-					"Object " + stateNode + " is of unknown SCXML <state> type.")
+					"Object " + scxmlStateNode + " is of unknown SCXML <state> type.")
 			}
 		}
 		
@@ -125,27 +148,51 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			]
 			gammaState.regions += region
 				
-			val stateNodes = getStateNodes(scxmlState)
+			val scxmlStateNodes = getStateNodes(scxmlState)
 			
-			for (stateNode : stateNodes) {
-				if (isParallel(stateNode)) {
-					val parallel = stateNode as ScxmlParallelType
+			for (scxmlStateNode : scxmlStateNodes) {
+				if (isParallel(scxmlStateNode)) {
+					val parallel = scxmlStateNode as ScxmlParallelType
 					region.stateNodes += parallel.transformParallel
 				}
-				else if (isState(stateNode)) {
-					val state = stateNode as ScxmlStateType
+				else if (isState(scxmlStateNode)) {
+					val state = scxmlStateNode as ScxmlStateType
 					region.stateNodes += state.transformState
 				}
-				else if (isFinal(stateNode)) {
-					val final = stateNode as ScxmlFinalType
+				else if (isFinal(scxmlStateNode)) {
+					val final = scxmlStateNode as ScxmlFinalType
 					region.stateNodes += final.transformFinal
 				}
 				else {
 					throw new IllegalArgumentException(
-						"Object " + stateNode + " is of unknown SCXML <state> type.")
+						"Object " + scxmlStateNode + " is of unknown SCXML <state> type.")
 				}
 			}
-		}
+			
+			// Transform the state's initial element or attribute,
+			// or select its first child as initial state if neither one above is present.
+			val scxmlInitialElement = scxmlState.initial.head
+			if (scxmlInitialElement !== null) {
+				region.stateNodes += scxmlInitialElement.transformInitial
+			}
+			else {
+				val gammaInitial = createInitialState => [
+					it.name = getInitialName(scxmlState)
+				]
+				region.stateNodes += gammaInitial	
+				
+				val scxmlInitialAttribute = scxmlState.initial1.head
+				if (scxmlInitialAttribute !== null) {
+					val gammaInitialTarget = traceability.getStateById(scxmlInitialAttribute)
+					gammaInitial.createTransition(gammaInitialTarget)
+				}
+				else {
+					val firstScxmlStateChild = getFirstChildStateNode(scxmlState) as ScxmlStateType
+					val gammaInitialTarget = traceability.getState(firstScxmlStateChild)
+					gammaInitial.createTransition(gammaInitialTarget)
+				}
+			}
+		}		
 		
 		traceability.put(scxmlState, gammaState)
 		
@@ -164,8 +211,21 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		return gammaFinal
 	}
 	
-	protected def Transition transform(ScxmlTransitionType transition) {
-		// For now, only ScxmlStateType is considered as a type of a transition source. TODO
+	protected def InitialState transformInitial(ScxmlInitialType scxmlInitial) {
+		logger.log(Level.INFO, "Transforming <initial> element")
+		
+		val parentState = getParentState(scxmlInitial)
+		val gammaInitial = createInitialState => [
+			it.name = getInitialName(parentState)
+		]
+		
+		traceability.put(scxmlInitial, gammaInitial)
+		
+		return gammaInitial
+	}
+	
+	protected def Transition transformTransition(ScxmlTransitionType transition) {
+		// TODO For now, only ScxmlStateType is considered as a type of transition source.
 		val sourceId = getParentStateNodeId(transition)
 		val targetId = transition.target.head
 		
