@@ -13,13 +13,18 @@ import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
-import java.util.HashMap
 import java.util.logging.Level
 
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
 
+// 1. Variable transformation and assignment, scoping
+// 2. History, parallel
+// 3. Event, port, trigger, ...
 class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
+	
+	protected final extension ActionTransformer actionTransformer
+	protected final extension DataTransformer dataTransformer
 	
 	// Root element of the SCXML statechart model to transform
 	protected final ScxmlScxmlType scxmlRoot
@@ -40,6 +45,9 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		this.gammaStatechart = createSynchronousStatechartDefinition => [
 			it.name = getStatechartName(scxmlRoot)
 		]
+		
+		this.actionTransformer = new ActionTransformer(traceability)
+		this.dataTransformer = new DataTransformer(traceability)
 	}
 	
 	// Transformation of the SCXML root element and its contents recursively
@@ -47,6 +55,18 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		traceability.put(scxmlRoot, gammaStatechart)
 		
 		logger.log(Level.INFO, "Transforming <scxml> root element (" + scxmlRoot.name + ")")
+		
+		val datamodels = scxmlRoot.datamodel
+		if (datamodels !== null) {
+			val datamodel = datamodels.head
+			if (datamodel !== null) {
+				val dataElements = getDataElements(datamodel)
+				for (data : dataElements) {
+					val gammaVariableDeclaration = dataTransformer.transform(data)
+					gammaStatechart.variableDeclarations += gammaVariableDeclaration
+				}
+			}
+		}
 		
 		val mainRegion = createRegion => [
 			it.name = getRegionName(scxmlRoot.name)
@@ -132,10 +152,23 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		}
 		
 		// TODO Transform history pseudo-states (by adding a wrapper compound state perhaps)
+		// Initial-ok kicserélése a gyerek state-ekben, amely parallelekben találok historyt
+		// Vagy history node hozzáadása minden gyerek régióhoz, ha van kívül history ??
 		/*val scxmlHistoryStates = parallelNode.history
 		for (scxmlHistoryState : scxmlHistoryStates) {
 			
 		}*/
+		
+		// Transform onentry and onexit handlers
+		val onentryActions = parallelNode.onentry
+		for (onentryAction : onentryActions) {
+			gammaParallel.entryActions += onentryAction.transformAction
+		}
+
+		val onexitActions = parallelNode.onexit
+		for (onexitAction : onexitActions) {
+			gammaParallel.exitActions += onexitAction.transformAction
+		}
 		
 		traceability.put(parallelNode, gammaParallel)
 		
@@ -204,6 +237,17 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			for (scxmlHistoryState : scxmlHistoryStates) {
 				region.stateNodes += scxmlHistoryState.transform
 			}
+			
+			// Transform onentry and onexit handlers
+			val onentryActions = scxmlState.onentry
+			for (onentryAction : onentryActions) {
+				gammaState.entryActions += onentryAction.transform
+			}
+			
+			val onexitActions = scxmlState.onexit
+			for (onexitAction : onexitActions) {
+				gammaState.exitActions += onexitAction.transform
+			}
 		}		
 		
 		traceability.put(scxmlState, gammaState)
@@ -217,6 +261,17 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		val gammaFinal = createState => [
 			it.name = getFinalName(scxmlFinal)
 		]
+		
+		// Transform onentry and onexit handlers
+		val onentryActions = scxmlFinal.onentry
+		for (onentryAction : onentryActions) {
+			gammaFinal.entryActions += onentryAction.transformAction
+		}
+
+		val onexitActions = scxmlFinal.onexit
+		for (onexitAction : onexitActions) {
+			gammaFinal.exitActions += onexitAction.transformAction
+		}
 		
 		traceability.put(scxmlFinal, gammaFinal)
 		
@@ -267,12 +322,20 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		logger.log(Level.INFO, "Transforming transition" + gammaSource.name + " -> " + gammaTarget.name)
 
 		val gammaTransition = gammaSource.createTransition(gammaTarget)
-
+		
+		val eventName = transition.event // TODO transform event trigger
+		// TODO EventTrigger, portok, etc.
+		
 		val guardStr = transition.cond
 		if (guardStr !== null) {
-			val gammaGuardExpression = conditionalLanguageParser.parse(guardStr, new HashMap)
+			val gammaGuardExpression = expressionLanguageParser.parse(guardStr, traceability.variables)
 			gammaTransition.guard = gammaGuardExpression
 		}
+		
+		val effects = transition.assign // TODO Get all children actions
+		gammaTransition.effects += effects.transformBlock
+		
+		// TODO throw exception when an internal transition encounter, not supported
 
 		traceability.put(transition, gammaTransition)
 			

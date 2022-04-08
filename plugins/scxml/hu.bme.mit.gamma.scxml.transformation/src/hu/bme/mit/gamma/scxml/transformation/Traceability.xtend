@@ -1,5 +1,6 @@
 package hu.bme.mit.gamma.scxml.transformation
 
+import ac.soton.scxml.ScxmlDataType
 import ac.soton.scxml.ScxmlFinalType
 import ac.soton.scxml.ScxmlHistoryType
 import ac.soton.scxml.ScxmlInitialType
@@ -7,9 +8,12 @@ import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
+import hu.bme.mit.gamma.expression.model.Declaration
+import hu.bme.mit.gamma.expression.model.VariableDeclaration
 import hu.bme.mit.gamma.statechart.statechart.EntryState
 import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
+import hu.bme.mit.gamma.statechart.statechart.StateNode
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
 import hu.bme.mit.gamma.util.GammaEcoreUtil
@@ -17,7 +21,6 @@ import java.util.Map
 import org.eclipse.emf.ecore.EObject
 
 import static com.google.common.base.Preconditions.checkNotNull
-import hu.bme.mit.gamma.statechart.statechart.StateNode
 
 class Traceability {
 
@@ -34,6 +37,9 @@ class Traceability {
 	protected final Map<ScxmlInitialType, InitialState> initials = newHashMap
 	protected final Map<ScxmlHistoryType, EntryState> historyStates = newHashMap
 	protected final Map<ScxmlTransitionType, Transition> transitions = newHashMap
+	
+	protected final Map<ScxmlDataType, Declaration> dataElements = newHashMap
+	protected final Map<String, VariableDeclaration> variables = newHashMap
 
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
 
@@ -164,21 +170,22 @@ class Traceability {
 	// General functions returning a mapped Gamma StateNode
 	// Retrieves the mapped Gamma StateNode for an arbitrary transition source state
 	def getStateNode(EObject scxmlStateNode) {
+		// TODO StateNode that check type is appropriate
 		val gammaState = states.get(scxmlStateNode)
 		if (gammaState !== null) {
-			return gammaState as StateNode;
+			return gammaState as StateNode
 		}
 		val gammaParallel = parallels.get(scxmlStateNode)
 		if (gammaParallel !== null) {
-			return gammaParallel as StateNode;
+			return gammaParallel as StateNode
 		}
 		val gammaInitial = initials.get(scxmlStateNode)
 		if (gammaInitial !== null) {
-			return gammaInitial as StateNode;
+			return gammaInitial as StateNode
 		}
 		val gammaHistory = historyStates.get(scxmlStateNode)
-		checkNotNull(gammaHistory);
-		return gammaHistory as StateNode;
+		checkNotNull(gammaHistory)
+		return gammaHistory as StateNode
 	}
 	
 	// Retrieves the mapped Gamma StateNode for an arbitrary transition target state id
@@ -189,15 +196,15 @@ class Traceability {
 		}
 		val gammaParallel = parallels.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
 		if (gammaParallel !== null) {
-			return gammaParallel;
+			return gammaParallel
 		}
 		val gammaFinal = finals.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
 		if (gammaFinal !== null) {
-			return gammaFinal;
+			return gammaFinal
 		}
 		val gammaHistory = historyStates.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
-		checkNotNull(gammaHistory);
-		return gammaHistory;
+		checkNotNull(gammaHistory)
+		return gammaHistory
 
 	}
 
@@ -213,6 +220,36 @@ class Traceability {
 		val gammaTransition = transitions.get(scxmlTransition)
 		checkNotNull(gammaTransition)
 		return gammaTransition
+	}
+	
+	// <data> - VariableDeclaration
+	def put(ScxmlDataType scxmlData, VariableDeclaration gammaDeclaration) {
+		checkNotNull(scxmlData)
+		checkNotNull(gammaDeclaration)
+		dataElements += scxmlData -> gammaDeclaration
+		
+		put(scxmlData.id, gammaDeclaration)
+	}
+
+	def getVariable(ScxmlDataType scxmlData) {
+		checkNotNull(scxmlData)
+		val gammaDeclaration = dataElements.get(scxmlData)
+		checkNotNull(gammaDeclaration)
+		return gammaDeclaration
+	}
+	
+	// Variable Declarations by String identifier
+	private def put(String scxmlVariableName, VariableDeclaration gammaDeclaration) {
+		checkNotNull(scxmlVariableName)
+		checkNotNull(gammaDeclaration)
+		variables += scxmlVariableName -> gammaDeclaration
+	}
+
+	def getVariable(String scxmlVariableName) {
+		checkNotNull(scxmlVariableName)
+		val gammaDeclaration = variables.get(scxmlVariableName)
+		checkNotNull(gammaDeclaration)
+		return gammaDeclaration
 	}
 
 }
