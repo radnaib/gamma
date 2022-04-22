@@ -17,12 +17,14 @@ import hu.bme.mit.gamma.expression.model.ExpressionModelFactory;
 import hu.bme.mit.gamma.expression.model.OpaqueExpression;
 import hu.bme.mit.gamma.expression.model.VariableDeclaration;
 
+// TODO rename, e.g. Custom...
 public class ScxmlGammaExpressionLanguageParser {
 
 	ExpressionModelFactory expressionModelFactory = ExpressionModelFactory.eINSTANCE;
 	
 	private Injector injector = new ExpressionLanguageStandaloneSetup().createInjectorAndDoEMFRegistration();
-
+	
+	// Works only if variables in the scope are globally unique and have a global scope
 	public Expression parse(String expression, Map<String, VariableDeclaration> scope) {
 		ScxmlGammaLanguageParser parser = injector.getInstance(ScxmlGammaLanguageParser.class);
 		StringReader reader = new StringReader(expression);

@@ -11,16 +11,15 @@ import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.resource.Resource;
-import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.ui.handlers.HandlerUtil;
 
-import ac.soton.scxml.DocumentRoot;
 import ac.soton.scxml.ScxmlScxmlType;
 import hu.bme.mit.gamma.scxml.transformation.ScxmlToGammaStatechartTransformer;
 import hu.bme.mit.gamma.scxml.transformation.Traceability;
+import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures;
+import hu.bme.mit.gamma.statechart.interface_.Interface;
 import hu.bme.mit.gamma.statechart.interface_.Package;
 import hu.bme.mit.gamma.statechart.language.ui.serializer.StatechartLanguageSerializer;
 import hu.bme.mit.gamma.statechart.statechart.StatechartDefinition;
@@ -56,16 +55,32 @@ public class CommandHandler extends AbstractHandler {
 						EObject object = ecoreUtil.normalLoad(fileURI);
 						ScxmlScxmlType scxmlRoot = ecoreUtil.getFirstOfAllContentsOfType(object, ScxmlScxmlType.class);
 						
+						
+						
 						// Model processing
 						ScxmlToGammaStatechartTransformer statechartTransformer = new ScxmlToGammaStatechartTransformer(scxmlRoot);
 						Traceability traceability = statechartTransformer.execute();
+						
+						// Interfaces and type declarations have to be explicitly serialized in another package
+						Interface gammaInterface = traceability.getDefaultInterface();
+						Package gammaInterfacePackage = statechartUtil.wrapIntoPackage(gammaInterface);
+						
+						// TODO issue wrapIntoPackageAndAddImports
 						StatechartDefinition statechartDefinition = traceability.getStatechartDefinition(scxmlRoot);
 						Package gammaComponentPackage = statechartUtil.wrapIntoPackage(statechartDefinition);
+						gammaComponentPackage.getImports().addAll(
+								StatechartModelDerivedFeatures.getImportablePackages(statechartDefinition));
+						gammaComponentPackage.getImports().remove(gammaComponentPackage);
 						
 						StatechartLanguageSerializer packageSerializer = new StatechartLanguageSerializer();
-						logger.log(Level.INFO, "Start serializing Gamma package...");
-						String componentPackageFileName = extensionlessFileName + "Transformed.gcd";
+						logger.log(Level.INFO, "Start serializing Gamma packages...");
+						
+						String declarationsPackageFileName = extensionlessFileName + "Declarations.gcd";
+						packageSerializer.serialize(gammaInterfacePackage, parentPath, declarationsPackageFileName);
+						
+						String componentPackageFileName = extensionlessFileName + ".gcd";
 						packageSerializer.serialize(gammaComponentPackage, parentPath, componentPackageFileName);
+						
 						logger.log(Level.INFO, "The SCXML - Gamma statechart transformation has finished.");
 						
 					}

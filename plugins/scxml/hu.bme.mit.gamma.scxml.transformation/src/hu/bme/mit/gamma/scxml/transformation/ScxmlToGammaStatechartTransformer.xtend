@@ -17,10 +17,22 @@ import java.util.logging.Level
 
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
+import hu.bme.mit.gamma.statechart.interface_.RealizationMode
+import hu.bme.mit.gamma.statechart.interface_.EventDirection
 
 // 1. Variable transformation and assignment, scoping
 // 2. History, parallel
-// 3. Event, port, trigger, ...
+
+// TODO pull fresh gamma/dev
+
+// TODO 3. Event, port, trigger, ...
+// Jövő héten pull-olom a GitHubon a forkba a gamma/dev-et, utána pull és újragenerálás
+/* 1. step: Default implicit port and interface for (every) statechart -> trace,
+ * <raise> actions will send events to this port, too
+ * 
+ * 2. step: x.aabb ~ x port's interface's aabb event e.g.
+ * Szétválasztani a be- és kimenő portokat+interfészeket
+ */
 class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	
 	protected final extension ActionTransformer actionTransformer
@@ -53,6 +65,9 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	// Transformation of the SCXML root element and its contents recursively
 	def execute() {
 		traceability.put(scxmlRoot, gammaStatechart)
+		
+		createDefaultPortAndInterface()
+		gammaStatechart.ports += traceability.defaultPort
 		
 		logger.log(Level.INFO, "Transforming <scxml> root element (" + scxmlRoot.name + ")")
 		
@@ -265,6 +280,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		// Transform onentry and onexit handlers
 		val onentryActions = scxmlFinal.onentry
 		for (onentryAction : onentryActions) {
+			// TODO Handle nulls
 			gammaFinal.entryActions += onentryAction.transformAction
 		}
 
@@ -323,11 +339,32 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 
 		val gammaTransition = gammaSource.createTransition(gammaTarget)
 		
-		val eventName = transition.event // TODO transform event trigger
-		// TODO EventTrigger, portok, etc.
+		// Transform event trigger
+		// TODO extract methods into proper classes
+		val eventName = transition.event
 		
+		val event = createEvent
+		event.name = eventName
+		
+		// TODO getOrTransform
+		val eventDeclaration = createEventDeclaration
+		eventDeclaration.event = event
+		eventDeclaration.direction = EventDirection.IN
+		traceability.defaultInterface.events += eventDeclaration
+		
+		val eventReference = createPortEventReference
+		eventReference.event = event
+		eventReference.port = traceability.defaultPort
+		
+		val eventTrigger = createEventTrigger
+		eventTrigger.eventReference = eventReference
+		gammaTransition.trigger = eventTrigger
+		
+		//
+		
+		// Check nullOrEmpty
 		val guardStr = transition.cond
-		if (guardStr !== null) {
+		if (!guardStr.nullOrEmpty) {
 			val gammaGuardExpression = expressionLanguageParser.parse(guardStr, traceability.variables)
 			gammaTransition.guard = gammaGuardExpression
 		}
@@ -340,6 +377,27 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		traceability.put(transition, gammaTransition)
 			
 		return gammaTransition
+	}
+	
+	// TODO event name = port.interface.event ?? split
+	// e.g. event (1) on default port / port.event (2) / port.interface.event (3) options
+	// Create event, port and triggertransformer
+	// Create default port (check at the end not to be used by the user), and interface
+	// raise event actions
+	private def createDefaultPortAndInterface() {
+		val defaultInterface = createInterface
+		defaultInterface.name = "DefaultInterface1"
+		
+		val defaultInterfaceRealization = createInterfaceRealization
+		defaultInterfaceRealization.realizationMode = RealizationMode.PROVIDED
+		defaultInterfaceRealization.interface = defaultInterface
+		
+		val defaultPort = createPort
+		defaultPort.name = "DefaultPort"
+		defaultPort.interfaceRealization = defaultInterfaceRealization
+		
+		traceability.defaultInterface = defaultInterface
+		traceability.defaultPort = defaultPort
 	}
 	
 }

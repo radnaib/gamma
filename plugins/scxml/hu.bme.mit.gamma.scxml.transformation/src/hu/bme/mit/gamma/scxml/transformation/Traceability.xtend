@@ -10,6 +10,8 @@ import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
 import hu.bme.mit.gamma.expression.model.Declaration
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
+import hu.bme.mit.gamma.statechart.interface_.Interface
+import hu.bme.mit.gamma.statechart.interface_.Port
 import hu.bme.mit.gamma.statechart.statechart.EntryState
 import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
@@ -39,9 +41,14 @@ class Traceability {
 	protected final Map<ScxmlTransitionType, Transition> transitions = newHashMap
 	
 	protected final Map<ScxmlDataType, Declaration> dataElements = newHashMap
+	
+	// Works only if variables are globally unique and have a global scope
 	protected final Map<String, VariableDeclaration> variables = newHashMap
 
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
+	
+	protected Port defaultPort
+	protected Interface defaultInterface
 
 	// <scxml> - Synchronous Statechart Definition
 	new(ScxmlScxmlType scxmlRoot) {
@@ -220,6 +227,22 @@ class Traceability {
 		val gammaTransition = transitions.get(scxmlTransition)
 		checkNotNull(gammaTransition)
 		return gammaTransition
+	}
+	
+	def getDefaultInterface() {
+		return defaultInterface
+	}
+	
+	def setDefaultInterface(Interface defaultInterface) {
+		this.defaultInterface = defaultInterface
+	}
+	
+	def getDefaultPort() {
+		return defaultPort
+	}
+	
+	def setDefaultPort(Port defaultPort) {
+		this.defaultPort = defaultPort
 	}
 	
 	// <data> - VariableDeclaration
