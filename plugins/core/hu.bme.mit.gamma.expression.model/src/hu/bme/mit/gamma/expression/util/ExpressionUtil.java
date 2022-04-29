@@ -77,6 +77,7 @@ import hu.bme.mit.gamma.expression.model.ValueDeclaration;
 import hu.bme.mit.gamma.expression.model.VariableDeclaration;
 import hu.bme.mit.gamma.expression.model.VariableDeclarationAnnotation;
 import hu.bme.mit.gamma.util.GammaEcoreUtil;
+import hu.bme.mit.gamma.util.JavaUtil;
 
 public class ExpressionUtil {
 	// Singleton
@@ -85,6 +86,7 @@ public class ExpressionUtil {
 	//
 	
 	protected final GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE;
+	protected final JavaUtil javaUtil = JavaUtil.INSTANCE;
 	protected final ExpressionEvaluator evaluator = ExpressionEvaluator.INSTANCE;
 	protected final ExpressionTypeDeterminator2 typeDeterminator = ExpressionTypeDeterminator2.INSTANCE;
 	protected final ExpressionModelFactory factory = ExpressionModelFactory.eINSTANCE;
@@ -932,50 +934,46 @@ public class ExpressionUtil {
 	
 	public Expression wrapIntoMultiaryExpression(Expression original,
 			Expression addition, MultiaryExpression potentialContainer) {
-		if (original == null) {
-			return addition;
-		}
-		if (addition == null) {
-			return original;
-		}
-		List<Expression> operands = potentialContainer.getOperands();
+		List<Expression> operands = new ArrayList<Expression>();
 		operands.add(original);
 		operands.add(addition);
-		return potentialContainer;
+		return wrapIntoMultiaryExpression(operands, potentialContainer);
 	}
 	
 	public Expression wrapIntoMultiaryExpression(Expression original,
 			Collection<? extends Expression> additions, MultiaryExpression potentialContainer) {
-		List<Expression> operands = potentialContainer.getOperands();
-		if (original != null) {
-			operands.add(original);
-		}
+		List<Expression> operands = new ArrayList<Expression>();
+		operands.add(original);
 		operands.addAll(additions);
-		operands.removeIf(it -> it == null);
-		if (operands.isEmpty()) {
-			return null;
-		}
-		if (operands.size() == 1) {
-			return operands.get(0);
-		}
-		return potentialContainer;
+		return wrapIntoMultiaryExpression(operands, potentialContainer);
 	}
 	
 	public Expression wrapIntoMultiaryExpression(Collection<? extends Expression> expressions,
-			MultiaryExpression potentialContainer) {
-		if (expressions.isEmpty()) {
+				MultiaryExpression potentialContainer) {
+		List<Expression> operands = new ArrayList<Expression>(expressions);
+		operands.removeIf(it -> it == null);
+		
+		if (operands.isEmpty()) {
 			return null;
 		}
-		int size = expressions.size();
+		int size = operands.size();
 		if (size == 1) {
-			return expressions.iterator().next();
+			return operands.iterator().next();
 		}
-		potentialContainer.getOperands().addAll(expressions);
+		potentialContainer.getOperands().addAll(operands);
 		return potentialContainer;
+	}
+	
+	public Expression wrapIntoAndExpression(Expression original, Expression addition) {
+		return wrapIntoMultiaryExpression(original, addition, factory.createAndExpression());
 	}
 	
 	public Expression wrapIntoAndExpression(Collection<? extends Expression> expressions) {
 		return wrapIntoMultiaryExpression(expressions, factory.createAndExpression());
+	}
+	
+	public Expression wrapIntoOrExpression(Expression original, Expression addition) {
+		return wrapIntoMultiaryExpression(original, addition, factory.createOrExpression());
 	}
 	
 	public Expression wrapIntoOrExpression(Collection<? extends Expression> expressions) {

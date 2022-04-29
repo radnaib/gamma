@@ -13,7 +13,6 @@ package hu.bme.mit.gamma.scenario.trace.generator
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.TransitionMerging
 import hu.bme.mit.gamma.scenario.statechart.util.ScenarioStatechartUtil
 import hu.bme.mit.gamma.statechart.contract.NotDefinedEventMode
-import hu.bme.mit.gamma.statechart.contract.ScenarioAllowedWaitAnnotation
 import hu.bme.mit.gamma.statechart.contract.ScenarioContractAnnotation
 import hu.bme.mit.gamma.statechart.interface_.Component
 import hu.bme.mit.gamma.statechart.interface_.Package
@@ -50,18 +49,11 @@ class ScenarioStatechartTraceGenerator {
 	String absoluteParentFolder
 
 	Package _package
-	
-	ScenarioAllowedWaitAnnotation annotation
-	
+		
 	new(StatechartDefinition statechart, int schedulingConstraint) {
-		this(statechart, schedulingConstraint, null);
-	}
-
-	new(StatechartDefinition sd, int schedulingConstraint, ScenarioAllowedWaitAnnotation annotation) {
 		this.schedulingConstraint = schedulingConstraint
-		this.statechart = sd
+		this.statechart = statechart
 		this._package = statechart.containingPackage
-		this.annotation = annotation
 	}
 
 	def List<ExecutionTrace> execute() {
@@ -101,7 +93,7 @@ class ScenarioStatechartTraceGenerator {
 		val statechartName = statechart.name.toFirstUpper
 
 		val packageFileName = fileNamer.getUnfoldedPackageFileName(fileName)
-		val parameters = '''--refinement "MULTI_SEQ" --domain "EXPL" --initprec "ALLVARS" '''
+		val parameters = '''--refinement "MULTI_SEQ" --domain "EXPL" --initprec "ALLVARS" --allpaths'''
 		val query = '''E<> ((«regionName + "_" + statechartName» == «scenarioStatechartUtil.accepting»))'''
 		val gammaPackage = ecoreUtil.normalLoad(modelFile.parent, packageFileName)
 

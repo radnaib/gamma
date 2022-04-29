@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018 Contributors to the Gamma project
+ * Copyright (c) 2018-2022 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -20,7 +20,6 @@ import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
-import org.eclipse.xtext.EcoreUtil2;
 import org.eclipse.xtext.scoping.IScope;
 import org.eclipse.xtext.scoping.Scopes;
 import org.eclipse.xtext.scoping.impl.SimpleScope;
@@ -100,7 +99,7 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 				return Scopes.scopeFor(allComponents);
 			}
 			if (context instanceof StateContractAnnotation &&
-					reference == ContractModelPackage.Literals.STATE_CONTRACT_ANNOTATION__CONTRACT_STATECHARTS) {
+					reference == ContractModelPackage.Literals.STATE_CONTRACT_ANNOTATION__CONTRACT_STATECHART) {
 				Package parentPackage = StatechartModelDerivedFeatures.getContainingPackage(context);
 				StatechartDefinition parentStatechart = StatechartModelDerivedFeatures.getContainingStatechart(context);
 				Set<StatechartDefinition> allComponents = StatechartModelDerivedFeatures.getAllStatechartComponents(parentPackage);
@@ -110,11 +109,11 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 			// Phase
 			if (context instanceof InstanceVariableReference &&
 					reference == PhaseModelPackage.Literals.INSTANCE_VARIABLE_REFERENCE__VARIABLE) {
-				MissionPhaseStateDefinition container = EcoreUtil2.getContainerOfType(context, MissionPhaseStateDefinition.class);
-				SynchronousComponentInstance instance = container.getComponent();
-				SynchronousComponent type = instance.getType();
+				MissionPhaseStateDefinition container = ecoreUtil.getContainerOfType(context, MissionPhaseStateDefinition.class);
+				ComponentInstance instance = container.getComponent();
+				Component type = StatechartModelDerivedFeatures.getDerivedType(instance);
 				if (type instanceof StatechartDefinition) {
-					StatechartDefinition statechart = (StatechartDefinition) instance.getType();
+					StatechartDefinition statechart = (StatechartDefinition) type;
 					return Scopes.scopeFor(statechart.getVariableDeclarations());
 				}
 			}
@@ -322,7 +321,7 @@ public class StatechartLanguageScopeProvider extends AbstractStatechartLanguageS
 	
 	protected Collection<StateNode> stateNodesForTransition(Transition transition) {
 		StatechartDefinition rootElement = StatechartModelDerivedFeatures.getContainingStatechart(transition);
-		Collection<StateNode> candidates = EcoreUtil2.getAllContentsOfType(rootElement, StateNode.class);
+		Collection<StateNode> candidates = ecoreUtil.getAllContentsOfType(rootElement, StateNode.class);
 		return candidates;
 	}
 	

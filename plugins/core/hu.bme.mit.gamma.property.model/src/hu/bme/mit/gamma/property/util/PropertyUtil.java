@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2022 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -10,9 +10,13 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.property.util;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import hu.bme.mit.gamma.expression.model.Comment;
+import hu.bme.mit.gamma.expression.model.Declaration;
+import hu.bme.mit.gamma.expression.model.DirectReferenceExpression;
 import hu.bme.mit.gamma.expression.model.Expression;
-import hu.bme.mit.gamma.expression.model.ExpressionModelFactory;
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration;
 import hu.bme.mit.gamma.expression.model.VariableDeclaration;
 import hu.bme.mit.gamma.property.model.AtomicFormula;
@@ -22,6 +26,7 @@ import hu.bme.mit.gamma.property.model.CommentableStateFormula;
 import hu.bme.mit.gamma.property.model.ComponentInstanceEventParameterReference;
 import hu.bme.mit.gamma.property.model.ComponentInstanceEventReference;
 import hu.bme.mit.gamma.property.model.ComponentInstanceStateConfigurationReference;
+import hu.bme.mit.gamma.property.model.ComponentInstanceStateExpression;
 import hu.bme.mit.gamma.property.model.ComponentInstanceVariableReference;
 import hu.bme.mit.gamma.property.model.PathFormula;
 import hu.bme.mit.gamma.property.model.PathQuantifier;
@@ -46,19 +51,18 @@ public class PropertyUtil extends StatechartUtil {
 	public static final PropertyUtil INSTANCE = new PropertyUtil();
 	protected PropertyUtil() {}
 	//
-	protected final ExpressionModelFactory expressionFactory = ExpressionModelFactory.eINSTANCE;
-	protected final PropertyModelFactory factory = PropertyModelFactory.eINSTANCE;
+	protected final PropertyModelFactory propertyFactory = PropertyModelFactory.eINSTANCE;
 	
 	// Wrap
 	
 	public PropertyPackage wrapFormula(Component component, StateFormula formula) {
-		CommentableStateFormula commentableStateFormula = factory.createCommentableStateFormula();
+		CommentableStateFormula commentableStateFormula = propertyFactory.createCommentableStateFormula();
 		commentableStateFormula.setFormula(formula);
 		return wrapFormula(component, commentableStateFormula);
 	}
 	
 	public PropertyPackage wrapFormula(Component component, CommentableStateFormula formula) {
-		PropertyPackage propertyPackage = factory.createPropertyPackage();
+		PropertyPackage propertyPackage = propertyFactory.createPropertyPackage();
 		Package _package = StatechartModelDerivedFeatures.getContainingPackage(component);
 		propertyPackage.getImports().add(_package);
 		propertyPackage.setComponent(component);
@@ -66,19 +70,79 @@ public class PropertyUtil extends StatechartUtil {
 		return propertyPackage;
 	}
 	
+	// Wrapping - adding proxy wrapper instance referenecs
+	
+	public void extendFormulasWithWrapperInstance(PropertyPackage propertyPackage) {
+		Component component = propertyPackage.getComponent();
+		for (CommentableStateFormula commentableStateFormula : propertyPackage.getFormulas()) {
+			StateFormula formula = commentableStateFormula.getFormula();
+			List<ComponentInstanceStateExpression> stateExpressions =
+					ecoreUtil.getAllContentsOfType(formula, ComponentInstanceStateExpression.class);
+			for (ComponentInstanceStateExpression stateExpression : stateExpressions) {
+				ComponentInstanceReference instanceReference = stateExpression.getInstance();
+				ComponentInstance wrapperInstance = instantiateComponent(component);
+				prependAndReplace(instanceReference, wrapperInstance);
+			}
+		}
+	}
+	
+	public void removeFirstInstanceFromFormulas(PropertyPackage propertyPackage) {
+		for (CommentableStateFormula commentableStateFormula : propertyPackage.getFormulas()) {
+			StateFormula formula = commentableStateFormula.getFormula();
+			List<ComponentInstanceStateExpression> stateExpressions =
+					ecoreUtil.getAllContentsOfType(formula, ComponentInstanceStateExpression.class);
+			for (ComponentInstanceStateExpression stateExpression : stateExpressions) {
+				ComponentInstanceReference instanceReference = stateExpression.getInstance();
+				ComponentInstanceReference child = instanceReference.getChild();
+				ecoreUtil.replace(child, instanceReference);
+			}
+		}
+	}
+	
+	//
+	
+	public ComponentInstanceStateExpression chainReferences(
+			List<? extends Expression> operands) {
+		List<Expression> expressions = new ArrayList<Expression>(operands);
+		// If it is a variable reference, we expect the first "n" elements
+		// to be ComponentInstanceReference
+		List<ComponentInstanceReference> instanceReferences =
+				javaUtil.filterIntoList(expressions, ComponentInstanceReference.class);
+		ComponentInstanceReference rootInstance =
+				createInstanceReferenceChain(instanceReferences);
+		
+		// Last operand is the declaration reference
+		Expression lastExpression = javaUtil.getLast(expressions);
+		if (lastExpression instanceof DirectReferenceExpression) {
+			Declaration declaration = getDeclaration(lastExpression);
+			if (declaration instanceof VariableDeclaration) {
+				VariableDeclaration variableDeclaration = (VariableDeclaration) declaration;
+				ComponentInstanceVariableReference variableReference =
+						createVariableReference(rootInstance, variableDeclaration);
+				return variableReference;
+			}
+			else {
+				throw new IllegalArgumentException("Not known type: " + declaration);
+			}
+		}
+		else {
+			throw new IllegalArgumentException("Not known type: " + lastExpression);
+		}
+	}
+	
 	//
 	
 	public AtomicFormula createAtomicFormula(Expression expression) {
-		AtomicFormula atomicFormula = factory.createAtomicFormula();
+		AtomicFormula atomicFormula = propertyFactory.createAtomicFormula();
 		atomicFormula.setExpression(expression);
 		return atomicFormula;
 	}
 	
 	public StateFormula createSimpleCTLFormula(PathQuantifier pathQuantifier,
 			UnaryPathOperator unaryPathOperator, PathFormula formula) {
-		QuantifiedFormula quantifiedFormula = factory.createQuantifiedFormula();
+		QuantifiedFormula quantifiedFormula = propertyFactory.createQuantifiedFormula();
 		quantifiedFormula.setQuantifier(pathQuantifier);
-		UnaryOperandPathFormula pathFormula = factory.createUnaryOperandPathFormula();
+		UnaryOperandPathFormula pathFormula = propertyFactory.createUnaryOperandPathFormula();
 		pathFormula.setOperator(unaryPathOperator);
 		quantifiedFormula.setFormula(pathFormula);
 		pathFormula.setOperand(formula);
@@ -102,7 +166,7 @@ public class PropertyUtil extends StatechartUtil {
 	}
 	
 	public StateFormula createLeadsTo(PathFormula lhs, PathFormula rhs) {
-		BinaryOperandLogicalPathFormula imply = factory.createBinaryOperandLogicalPathFormula();
+		BinaryOperandLogicalPathFormula imply = propertyFactory.createBinaryOperandLogicalPathFormula();
 		imply.setOperator(BinaryLogicalOperator.IMPLY);
 		imply.setLeftOperand(lhs);
 		StateFormula AF = createAF(rhs);
@@ -115,9 +179,9 @@ public class PropertyUtil extends StatechartUtil {
 	
 	public CommentableStateFormula createCommentableStateFormula(
 			String commentString, StateFormula formula) {
-		CommentableStateFormula commentableStateFormula = factory.createCommentableStateFormula();
+		CommentableStateFormula commentableStateFormula = propertyFactory.createCommentableStateFormula();
 		commentableStateFormula.setFormula(formula);
-		Comment comment = expressionFactory.createComment();
+		Comment comment = factory.createComment();
 		comment.setComment(commentString);
 		commentableStateFormula.getComments().add(comment);
 		return commentableStateFormula;
@@ -131,7 +195,7 @@ public class PropertyUtil extends StatechartUtil {
 	
 	public ComponentInstanceStateConfigurationReference createStateReference(
 			ComponentInstanceReference instance, State state) {
-		ComponentInstanceStateConfigurationReference reference = factory.createComponentInstanceStateConfigurationReference();
+		ComponentInstanceStateConfigurationReference reference = propertyFactory.createComponentInstanceStateConfigurationReference();
 		reference.setInstance(instance);
 		reference.setRegion(StatechartModelDerivedFeatures.getParentRegion(state));
 		reference.setState(state);
@@ -140,7 +204,7 @@ public class PropertyUtil extends StatechartUtil {
 	
 	public ComponentInstanceVariableReference createVariableReference(ComponentInstanceReference instance,
 			VariableDeclaration variable) {
-		ComponentInstanceVariableReference reference = factory.createComponentInstanceVariableReference();
+		ComponentInstanceVariableReference reference = propertyFactory.createComponentInstanceVariableReference();
 		reference.setInstance(instance);
 		reference.setVariable(variable);
 		return reference;
@@ -148,7 +212,7 @@ public class PropertyUtil extends StatechartUtil {
 	
 	public ComponentInstanceEventReference createEventReference(ComponentInstanceReference instance,
 			Port port, Event event) {
-		ComponentInstanceEventReference reference = factory.createComponentInstanceEventReference();
+		ComponentInstanceEventReference reference = propertyFactory.createComponentInstanceEventReference();
 		reference.setInstance(instance);
 		reference.setPort(port);
 		reference.setEvent(event);
@@ -157,7 +221,7 @@ public class PropertyUtil extends StatechartUtil {
 	
 	public ComponentInstanceEventParameterReference createParameterReference(
 			ComponentInstanceReference instance, Port port, Event event, ParameterDeclaration parameter) {
-		ComponentInstanceEventParameterReference reference = factory.createComponentInstanceEventParameterReference();
+		ComponentInstanceEventParameterReference reference = propertyFactory.createComponentInstanceEventParameterReference();
 		reference.setInstance(instance);
 		reference.setPort(port);
 		reference.setEvent(event);

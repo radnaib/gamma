@@ -150,7 +150,7 @@ class ReflectiveComponentCodeGenerator {
 	protected def generateReflectiveImports(Component component) '''
 		import «BASE_PACKAGE_NAME».*;
 		import java.util.Objects;
-		«FOR _package : component.containingPackage.allImports /* For type declarations */»
+		«FOR _package : component.containingPackage.componentImports /* For type declarations */»
 			import «_package.getPackageString(BASE_PACKAGE_NAME)».*;
 		«ENDFOR»
 	'''
@@ -242,7 +242,7 @@ class ReflectiveComponentCodeGenerator {
 						}
 						return «component.getWrappedComponentName»;
 				«ENDIF»
-				«IF component instanceof StatechartDefinition»
+				«IF component instanceof StatechartDefinition || component instanceof AsynchronousAdapter»
 					// If the class name is given, then it will return itself
 					case "«component.getComponentClassName»":
 						return this;
