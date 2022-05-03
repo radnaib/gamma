@@ -55,8 +55,6 @@ public class CommandHandler extends AbstractHandler {
 						EObject object = ecoreUtil.normalLoad(fileURI);
 						ScxmlScxmlType scxmlRoot = ecoreUtil.getFirstOfAllContentsOfType(object, ScxmlScxmlType.class);
 						
-						
-						
 						// Model processing
 						ScxmlToGammaStatechartTransformer statechartTransformer = new ScxmlToGammaStatechartTransformer(scxmlRoot);
 						Traceability traceability = statechartTransformer.execute();
@@ -64,13 +62,10 @@ public class CommandHandler extends AbstractHandler {
 						// Interfaces and type declarations have to be explicitly serialized in another package
 						Interface gammaInterface = traceability.getDefaultInterface();
 						Package gammaInterfacePackage = statechartUtil.wrapIntoPackage(gammaInterface);
+						gammaInterfacePackage.getInterfaces().addAll(traceability.getInterfaces().values());
 						
-						// TODO issue wrapIntoPackageAndAddImports
 						StatechartDefinition statechartDefinition = traceability.getStatechartDefinition(scxmlRoot);
-						Package gammaComponentPackage = statechartUtil.wrapIntoPackage(statechartDefinition);
-						gammaComponentPackage.getImports().addAll(
-								StatechartModelDerivedFeatures.getImportablePackages(statechartDefinition));
-						gammaComponentPackage.getImports().remove(gammaComponentPackage);
+						Package gammaComponentPackage = statechartUtil.wrapIntoPackageAndAddImports(statechartDefinition);
 						
 						StatechartLanguageSerializer packageSerializer = new StatechartLanguageSerializer();
 						logger.log(Level.INFO, "Start serializing Gamma packages...");
