@@ -69,10 +69,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	// Transformation of the SCXML root element and its contents recursively
 	def execute() {
 		traceability.put(scxmlRoot, gammaStatechart)
-		
-		createDefaultPortAndInterface()
-		gammaStatechart.ports += traceability.defaultPort
-		
+				
 		logger.log(Level.INFO, "Transforming <scxml> root element (" + scxmlRoot.name + ")")
 		
 		val datamodels = scxmlRoot.datamodel
@@ -136,8 +133,11 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		}
 		
 		// Add all ports from traceability
+		if (traceability.getDefaultPort !== null) {
+			gammaStatechart.ports += traceability.getDefaultPort
+		}
+		gammaStatechart.ports += traceability.defaultInterfacePorts.values
 		gammaStatechart.ports += traceability.ports.values
-		//
 		
 		return traceability
 	}
@@ -370,22 +370,6 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		traceability.put(transition, gammaTransition)
 			
 		return gammaTransition
-	}
-	
-	private def createDefaultPortAndInterface() {
-		val defaultInterface = createInterface
-		defaultInterface.name = "DefaultInterface"
-		
-		val defaultInterfaceRealization = createInterfaceRealization
-		defaultInterfaceRealization.realizationMode = RealizationMode.PROVIDED
-		defaultInterfaceRealization.interface = defaultInterface
-		
-		val defaultPort = createPort
-		defaultPort.name = "DefaultPort"
-		defaultPort.interfaceRealization = defaultInterfaceRealization
-		
-		traceability.defaultInterface = defaultInterface
-		traceability.defaultPort = defaultPort
 	}
 	
 }

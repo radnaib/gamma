@@ -1,18 +1,22 @@
 package hu.bme.mit.gamma.scxml.transformation
 
-import hu.bme.mit.gamma.statechart.interface_.EventDirection
+import hu.bme.mit.gamma.statechart.interface_.Interface
+import hu.bme.mit.gamma.statechart.interface_.Port
 
 class TriggerTransformer extends AbstractTransformer {
 	
 	protected final extension PortTransformer portTransformer
+	protected final extension InterfaceTransformer interfaceTransformer
 	protected final extension EventTransformer eventTransformer
 	
 	new(Traceability traceability) {
 		super(traceability)
 		this.portTransformer = new PortTransformer(traceability)
+		this.interfaceTransformer = new InterfaceTransformer(traceability)
 		this.eventTransformer = new EventTransformer(traceability)
 	}
 	
+	// TODO sanitize and check eventString
 	def transformTrigger(String eventString) {
 		val tokens = eventString.split("\\.")
 		if (tokens.size < 1 || tokens.size > 3) {
@@ -21,20 +25,28 @@ class TriggerTransformer extends AbstractTransformer {
 			)
 		}
 		
-		val defaultPort = traceability.defaultPort
-		val gammaPort = (
-			if (tokens.size == 2) {
+		var gammaInterface = null as Interface
+		var gammaPort = null as Port
+		
+		if (tokens.size == 1) {
+			gammaInterface = getOrCreateDefaultInterface()
+			gammaPort = getOrCreateDefaultPort()
+		}
+		else {
+			val interfaceName = tokens.get(tokens.size - 2)
+			gammaInterface = getOrTransformInterfaceByName(interfaceName)
+			
+			if (tokens.size >= 3) {
 				val portName = tokens.head
-				val newGammaPort = getOrTransformPortByName(portName)
-				newGammaPort
+				gammaPort = getOrTransformPortByName(gammaInterface, portName)
 			}
 			else {
-				defaultPort
+				gammaPort = getOrTransformDefaultInterfacePort(gammaInterface)
 			}
-		)
+		}
 		
 		val eventName = tokens.last
-		val gammaEvent = getOrTransformInEvent(gammaPort, eventName)
+		val gammaEvent = getOrTransformInEvent(gammaInterface, eventName)
 		
 		val gammaEventReference = createPortEventReference
 		gammaEventReference.port = gammaPort

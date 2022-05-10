@@ -8,8 +8,14 @@ import ac.soton.scxml.ScxmlStateType
 
 class Namings {
 	
-	def static String getInterfaceName(String scxmlPortName) '''«scxmlPortName»_Interface'''
+	// TODO check default names differ from user defined interface and port names
+	// at the end of the transformation
+	def static String getDefaultPortName() '''_DefaultPort'''
+	def static String getDefaultInterfaceName() '''_DefaultInterface'''
+	def static String getDefaultInterfacePortName(String scxmlInterfaceName) '''«scxmlInterfaceName»_DefaultPort'''
+	def static String getInterfaceName(String scxmlInterfaceName) '''«scxmlInterfaceName»'''
 	def static String getPortName(String scxmlPortName) '''«scxmlPortName»'''
+	
 	def static String getInEventName(String scxmlEventName) '''in_«scxmlEventName»'''
 	def static String getOutEventName(String scxmlEventName) '''out_«scxmlEventName»'''
 	

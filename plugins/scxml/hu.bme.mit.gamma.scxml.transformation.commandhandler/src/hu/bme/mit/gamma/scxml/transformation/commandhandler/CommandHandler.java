@@ -1,6 +1,7 @@
 package hu.bme.mit.gamma.scxml.transformation.commandhandler;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -18,7 +19,6 @@ import org.eclipse.ui.handlers.HandlerUtil;
 import ac.soton.scxml.ScxmlScxmlType;
 import hu.bme.mit.gamma.scxml.transformation.ScxmlToGammaStatechartTransformer;
 import hu.bme.mit.gamma.scxml.transformation.Traceability;
-import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures;
 import hu.bme.mit.gamma.statechart.interface_.Interface;
 import hu.bme.mit.gamma.statechart.interface_.Package;
 import hu.bme.mit.gamma.statechart.language.ui.serializer.StatechartLanguageSerializer;
@@ -60,9 +60,10 @@ public class CommandHandler extends AbstractHandler {
 						Traceability traceability = statechartTransformer.execute();
 						
 						// Interfaces and type declarations have to be explicitly serialized in another package
-						Interface gammaInterface = traceability.getDefaultInterface();
-						Package gammaInterfacePackage = statechartUtil.wrapIntoPackage(gammaInterface);
-						gammaInterfacePackage.getInterfaces().addAll(traceability.getInterfaces().values());
+						List<Interface> gammaInterfaces = traceability.getAllInterfaces();
+						Package gammaInterfacePackage = statechartUtil.wrapIntoPackage(gammaInterfaces.get(0));
+						gammaInterfaces.remove(0);
+						gammaInterfacePackage.getInterfaces().addAll(gammaInterfaces);
 						
 						StatechartDefinition statechartDefinition = traceability.getStatechartDefinition(scxmlRoot);
 						Package gammaComponentPackage = statechartUtil.wrapIntoPackageAndAddImports(statechartDefinition);
