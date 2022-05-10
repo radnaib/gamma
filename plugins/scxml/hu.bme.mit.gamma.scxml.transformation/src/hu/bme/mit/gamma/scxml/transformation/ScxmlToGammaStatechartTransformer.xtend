@@ -364,8 +364,17 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			gammaTransition.guard = gammaGuardExpression
 		}
 		
-		val effects = transition.assign // TODO Get all children actions
-		gammaTransition.effects += effects.transformBlock
+		// TODO for all types of actions
+		val assignEffects = transition.assign // TODO Get all children actions
+		if (!assignEffects.nullOrEmpty) {
+			gammaTransition.effects += assignEffects.transformBlock
+		}
+		
+		val raiseEffects = transition.raise // TODO Get all children actions
+		if (!raiseEffects.nullOrEmpty) {
+			gammaTransition.effects += raiseEffects.transformBlock
+		}
+		//
 
 		traceability.put(transition, gammaTransition)
 			

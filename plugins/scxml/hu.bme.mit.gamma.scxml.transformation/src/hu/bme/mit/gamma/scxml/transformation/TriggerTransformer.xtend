@@ -11,6 +11,7 @@ class TriggerTransformer extends AbstractTransformer {
 	
 	new(Traceability traceability) {
 		super(traceability)
+		
 		this.portTransformer = new PortTransformer(traceability)
 		this.interfaceTransformer = new InterfaceTransformer(traceability)
 		this.eventTransformer = new EventTransformer(traceability)
