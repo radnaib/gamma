@@ -28,24 +28,28 @@ class ActionTransformer extends AbstractTransformer {
 		this.expressionTransformer = new ScxmlGammaExpressionTransformer(traceability)
 	}
 	
-	def Action transform(ScxmlOnentryType scxmlOnentry) {
+	def Action transformOnentry(ScxmlOnentryType scxmlOnentry) {
 		logger.log(Level.INFO, "Transforming <onentry> element (" + scxmlOnentry + ")")
 		
 		// TODO Get list of all children actions, not just <assign>-s
-		val scxmlActions = scxmlOnentry.assign
-		val gammaEntryAction = scxmlActions.transformBlock;	// TODO
-		
-		return gammaEntryAction
+		val scxmlActions = scxmlOnentry.assign + scxmlOnentry.raise
+		if (!scxmlActions.nullOrEmpty) {
+			val gammaEntryAction = scxmlActions.transformBlock;
+			return gammaEntryAction
+		}
+		return null
 	}
 	
-	def Action transform(ScxmlOnexitType scxmlOnexit) {
+	def Action transformOnexit(ScxmlOnexitType scxmlOnexit) {
 		logger.log(Level.INFO, "Transforming <onexit> element (" + scxmlOnexit + ")")
 		
 		// TODO Get list of all children actions, not just <assign>-s
-		val scxmlActions = scxmlOnexit.assign
-		val gammaExitAction = scxmlActions.transformBlock;	// TODO
-		
-		return gammaExitAction
+		val scxmlActions = scxmlOnexit.assign + scxmlOnexit.raise
+		if (!scxmlActions.nullOrEmpty) {
+			val gammaExitAction = scxmlActions.transformBlock;
+			return gammaExitAction
+		}
+		return null
 	}
 	
 	def dispatch Action transformAction(ScxmlAssignType scxmlAssign) {

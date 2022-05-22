@@ -9,7 +9,6 @@ import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
 import ac.soton.scxml.TransitionTypeDatatype
-import hu.bme.mit.gamma.statechart.interface_.RealizationMode
 import hu.bme.mit.gamma.statechart.statechart.EntryState
 import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
@@ -20,21 +19,8 @@ import java.util.logging.Level
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
 
-// Scoping in variable transformation and assignment
+// TODO Scoping in variable transformation and assignment
 // TODO History, parallel
-
-// TODO Events, ports, triggers, ...
-// port.interface.event ~ port's interface's event split
-// event (1) on default port / interface.event (2) / port.interface.event (3) options
-// default port for each interface
-// TODO raise event actions
-
-// TODO docs
-// TODO scxml support (wiki, MagicDraw, RationalRhapsody etc.)
-
-// Create event, port and triggertransformer
-// Create default port (check at the end not to be used by the user), and interface
-
 class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	
 	protected final extension ActionTransformer actionTransformer
@@ -95,8 +81,9 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 				val parallel = scxmlStateNode as ScxmlParallelType
 				mainRegion.stateNodes += parallel.transformParallel
 			}
-			else if (scxmlStateNode instanceof ScxmlStateType) {
-				mainRegion.stateNodes += scxmlStateNode.transformState
+			else if (isState(scxmlStateNode)) {
+				val state = scxmlStateNode as ScxmlStateType
+				mainRegion.stateNodes += state.transformState
 			}
 			else if (isFinal(scxmlStateNode)) {
 				val final = scxmlStateNode as ScxmlFinalType
@@ -131,6 +118,10 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 			val gammaInitialTarget = traceability.getState(firstScxmlStateChild)
 			gammaInitial.createTransition(gammaInitialTarget)
 		}
+		
+		// Add all transitions from initial states of Gamma compound states
+		// specified by scxml initial attributes or document order
+		gammaStatechart.transitions += traceability.getInitialTransitions
 		
 		// Add all ports from traceability
 		if (traceability.getDefaultPort !== null) {
@@ -176,7 +167,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		
 		// TODO Transform history pseudo-states (by adding a wrapper compound state perhaps)
 		// Initial-ok kicserélése a gyerek state-ekben, amely parallelekben találok historyt
-		// Vagy history node hozzáadása minden gyerek régióhoz, ha van kívül history ??
+		// Vagy history node hozzáadása minden gyerek régióhoz, ha van kívül history?
 		/*val scxmlHistoryStates = parallelNode.history
 		for (scxmlHistoryState : scxmlHistoryStates) {
 			
@@ -185,12 +176,16 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		// Transform onentry and onexit handlers
 		val onentryActions = parallelNode.onentry
 		for (onentryAction : onentryActions) {
-			gammaParallel.entryActions += onentryAction.transformAction
+			if (onentryAction !== null) {
+				gammaParallel.entryActions += onentryAction.transformOnentry
+			}
 		}
-
+	
 		val onexitActions = parallelNode.onexit
 		for (onexitAction : onexitActions) {
-			gammaParallel.exitActions += onexitAction.transformAction
+			if (onexitAction !== null) {
+				gammaParallel.exitActions += onexitAction.transformOnexit
+			}
 		}
 		
 		traceability.put(parallelNode, gammaParallel)
@@ -231,6 +226,12 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 				}
 			}
 			
+			// Transform history pseudo-states
+			val scxmlHistoryStates = scxmlState.history
+			for (scxmlHistoryState : scxmlHistoryStates) {
+				region.stateNodes += scxmlHistoryState.transform
+			}
+			
 			// Transform the state's initial element or attribute,
 			// or select its first child as initial state if neither one above is present.
 			val scxmlInitialElement = scxmlState.initial.head
@@ -246,32 +247,32 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 				val scxmlInitialAttribute = scxmlState.initial1.head
 				if (scxmlInitialAttribute !== null) {
 					val gammaInitialTarget = traceability.getStateNodeById(scxmlInitialAttribute)
-					gammaInitial.createTransition(gammaInitialTarget)
+					val initialTransition = gammaInitial.createTransition(gammaInitialTarget)
+					traceability.putInitialTransition(initialTransition)
 				}
 				else {
 					val firstScxmlStateChild = getFirstChildStateNode(scxmlState) as ScxmlStateType
 					val gammaInitialTarget = traceability.getState(firstScxmlStateChild)
-					gammaInitial.createTransition(gammaInitialTarget)
+					val initialTransition = gammaInitial.createTransition(gammaInitialTarget)
+					traceability.putInitialTransition(initialTransition)
 				}
 			}
+		}
 			
-			// Transform history pseudo-states
-			val scxmlHistoryStates = scxmlState.history
-			for (scxmlHistoryState : scxmlHistoryStates) {
-				region.stateNodes += scxmlHistoryState.transform
+		// Transform onentry and onexit handlers
+		val onentryActions = scxmlState.onentry
+		for (onentryAction : onentryActions) {
+			if (onentryAction !== null) {
+				gammaState.entryActions += onentryAction.transformOnentry
 			}
-			
-			// Transform onentry and onexit handlers
-			val onentryActions = scxmlState.onentry
-			for (onentryAction : onentryActions) {
-				gammaState.entryActions += onentryAction.transform
+		}
+
+		val onexitActions = scxmlState.onexit
+		for (onexitAction : onexitActions) {
+			if (onexitAction !== null) {
+				gammaState.exitActions += onexitAction.transformOnexit
 			}
-			
-			val onexitActions = scxmlState.onexit
-			for (onexitAction : onexitActions) {
-				gammaState.exitActions += onexitAction.transform
-			}
-		}		
+		}
 		
 		traceability.put(scxmlState, gammaState)
 		
@@ -288,13 +289,16 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		// Transform onentry and onexit handlers
 		val onentryActions = scxmlFinal.onentry
 		for (onentryAction : onentryActions) {
-			// TODO Handle nulls
-			gammaFinal.entryActions += onentryAction.transformAction
+			if (onentryAction !== null) {
+				gammaFinal.entryActions += onentryAction.transformOnentry
+			}
 		}
 
 		val onexitActions = scxmlFinal.onexit
 		for (onexitAction : onexitActions) {
-			gammaFinal.exitActions += onexitAction.transformAction
+			if (onexitAction !== null) {
+				gammaFinal.exitActions += onexitAction.transformOnexit
+			}
 		}
 		
 		traceability.put(scxmlFinal, gammaFinal)
@@ -353,11 +357,14 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 
 		val gammaTransition = gammaSource.createTransition(gammaTarget)
 		
-		// Transform event trigger
+		// Transform event trigger if present
 		val eventName = transition.event
-		val eventTrigger = transformTrigger(eventName)
-		gammaTransition.trigger = eventTrigger
+		if (!eventName.nullOrEmpty) {
+			val eventTrigger = transformTrigger(eventName)
+			gammaTransition.trigger = eventTrigger
+		}
 		
+		// Transform guard if present
 		val guardStr = transition.cond
 		if (!guardStr.nullOrEmpty) {
 			val gammaGuardExpression = expressionLanguageParser.parse(guardStr, traceability.variables)
@@ -365,14 +372,9 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		}
 		
 		// TODO for all types of actions
-		val assignEffects = transition.assign // TODO Get all children actions
-		if (!assignEffects.nullOrEmpty) {
-			gammaTransition.effects += assignEffects.transformBlock
-		}
-		
-		val raiseEffects = transition.raise // TODO Get all children actions
-		if (!raiseEffects.nullOrEmpty) {
-			gammaTransition.effects += raiseEffects.transformBlock
+		val effects = transition.assign + transition.raise
+		if (!effects.nullOrEmpty) {
+			gammaTransition.effects += effects.transformBlock
 		}
 		//
 

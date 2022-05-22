@@ -24,6 +24,7 @@ import java.util.Map
 import org.eclipse.emf.ecore.EObject
 
 import static com.google.common.base.Preconditions.checkNotNull
+import java.util.Set
 
 class Traceability {
 
@@ -40,6 +41,7 @@ class Traceability {
 	protected final Map<ScxmlInitialType, InitialState> initials = newHashMap
 	protected final Map<ScxmlHistoryType, EntryState> historyStates = newHashMap
 	protected final Map<ScxmlTransitionType, Transition> transitions = newHashMap
+	protected final Set<Transition> initialTransitions = newHashSet
 	
 	protected final Map<ScxmlDataType, Declaration> dataElements = newHashMap
 	
@@ -202,19 +204,19 @@ class Traceability {
 	
 	// Retrieves the mapped Gamma StateNode for an arbitrary transition target state id
 	def getStateNodeById(String scxmlStateNodeId) {
-		val gammaState = states.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
+		val gammaState = states.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId]?.value
 		if (gammaState !== null) {
 			return gammaState
 		}
-		val gammaParallel = parallels.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
+		val gammaParallel = parallels.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId]?.value
 		if (gammaParallel !== null) {
 			return gammaParallel
 		}
-		val gammaFinal = finals.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
+		val gammaFinal = finals.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId]?.value
 		if (gammaFinal !== null) {
 			return gammaFinal
 		}
-		val gammaHistory = historyStates.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId].value
+		val gammaHistory = historyStates.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId]?.value
 		checkNotNull(gammaHistory)
 		return gammaHistory
 
@@ -232,6 +234,17 @@ class Traceability {
 		val gammaTransition = transitions.get(scxmlTransition)
 		checkNotNull(gammaTransition)
 		return gammaTransition
+	}
+	
+	// Transitions from initial states of Gamma compound states
+	// specified by scxml initial attributes or document order
+	def putInitialTransition(Transition gammaTransition) {
+		checkNotNull(gammaTransition)
+		initialTransitions += gammaTransition
+	}
+	
+	def getInitialTransitions() {
+		return initialTransitions
 	}
 	
 	// <data> - VariableDeclaration
