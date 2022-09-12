@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2022 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EObject;
 
 import hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures;
@@ -61,6 +60,7 @@ import hu.bme.mit.gamma.expression.model.MultiplyExpression;
 import hu.bme.mit.gamma.expression.model.NotExpression;
 import hu.bme.mit.gamma.expression.model.NullaryExpression;
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration;
+import hu.bme.mit.gamma.expression.model.ParametricElement;
 import hu.bme.mit.gamma.expression.model.RationalLiteralExpression;
 import hu.bme.mit.gamma.expression.model.RationalTypeDefinition;
 import hu.bme.mit.gamma.expression.model.RecordAccessExpression;
@@ -246,21 +246,24 @@ public class ExpressionUtil {
 	public Expression wrapIntoAdd(Expression expression, int value) {
 		AddExpression addExpression = factory.createAddExpression();
 		addExpression.getOperands().add(expression);
-		addExpression.getOperands().add(toIntegerLiteral(value));
+		addExpression.getOperands().add(
+				toIntegerLiteral(value));
 		return addExpression;
 	}
 	
 	public Expression wrapIntoSubtract(Expression expression, int value) {
 		SubtractExpression subtractExpression = factory.createSubtractExpression();
 		subtractExpression.setLeftOperand(expression);
-		subtractExpression.setRightOperand(toIntegerLiteral(value));
+		subtractExpression.setRightOperand(
+				toIntegerLiteral(value));
 		return subtractExpression;
 	}
 	
 	public Expression wrapIntoMultiply(Expression expression, int value) {
 		MultiplyExpression multiplyExpression = factory.createMultiplyExpression();
 		multiplyExpression.getOperands().add(expression);
-		multiplyExpression.getOperands().add(toIntegerLiteral(value));
+		multiplyExpression.getOperands().add(
+				toIntegerLiteral(value));
 		return multiplyExpression;
 	}
 
@@ -403,7 +406,7 @@ public class ExpressionUtil {
 
 	protected Set<ParameterDeclaration> _getReferredParameters(MultiaryExpression expression) {
 		Set<ParameterDeclaration> parameters = new HashSet<ParameterDeclaration>();
-		EList<Expression> _operands = expression.getOperands();
+		List<Expression> _operands = expression.getOperands();
 		for (Expression operand : _operands) {
 			parameters.addAll(getReferredParameters(operand));
 		}
@@ -482,7 +485,7 @@ public class ExpressionUtil {
 
 	protected Set<ConstantDeclaration> _getReferredConstants(MultiaryExpression expression) {
 		Set<ConstantDeclaration> constants = new HashSet<ConstantDeclaration>();
-		EList<Expression> _operands = expression.getOperands();
+		List<Expression> _operands = expression.getOperands();
 		for (Expression operand : _operands) {
 			constants.addAll(getReferredConstants(operand));
 		}
@@ -537,16 +540,24 @@ public class ExpressionUtil {
 	
 	// Extract parameters
 	
-	public List<ConstantDeclaration> extractParamaters(
+	public List<ConstantDeclaration> extractParameters(ParametricElement parametricElement,
+			List<String> names, List<? extends Expression> arguments) {
+		return extractParameters(parametricElement.getParameterDeclarations(), names, arguments);
+	}
+	
+	public List<ConstantDeclaration> extractParameters(
 			List<? extends ParameterDeclaration> parameters, List<String> names,
 			List<? extends Expression> arguments) {
 		List<ConstantDeclaration> constants = new ArrayList<ConstantDeclaration>();
 		int size = parameters.size();
 		for (int i = 0; i < size; i++) {
 			ParameterDeclaration parameter = parameters.get(i);
+			Expression argument = arguments.get(i);
+			
 			Type type = ecoreUtil.clone(parameter.getType());
 			String name = names.get(i);
-			Expression value = ecoreUtil.clone(arguments.get(i));
+			Expression value = ecoreUtil.clone(argument);
+			
 			ConstantDeclaration constant = factory.createConstantDeclaration();
 			constant.setName(name);
 			constant.setType(type);
@@ -558,19 +569,28 @@ public class ExpressionUtil {
 		return constants;
 	}
 	
-	public void inlineParamaters(List<? extends ParameterDeclaration> parameters,
+	public void inlineParameters(ParametricElement parametricElement,
 			List<? extends Expression> arguments) {
-		for (var i = 0; i < arguments.size(); i++) {
+		inlineParameters(parametricElement.getParameterDeclarations(), arguments);
+	}
+	
+	public void inlineParameters(List<? extends ParameterDeclaration> parameters,
+				List<? extends Expression> arguments) {
+		int size = parameters.size();
+		for (int i = 0; i < size; i++) {
 			ParameterDeclaration parameter = parameters.get(i);
 			Expression argument = arguments.get(i);
-			EObject root = parameter.eContainer();
-			for (DirectReferenceExpression reference : ecoreUtil.getSelfAndAllContentsOfType(
-					root, DirectReferenceExpression.class).stream()
-						.filter(it -> it.getDeclaration() == parameter)
-						.collect(Collectors.toList())) {
-				Expression clonedArgument = ecoreUtil.clone(argument);
-				ecoreUtil.replace(clonedArgument, reference);
+			
+			ParametricElement parametricElement = ecoreUtil.getContainerOfType(parameter, ParametricElement.class);
+			List<DirectReferenceExpression> references = ecoreUtil
+					.getAllContentsOfType(parametricElement, DirectReferenceExpression.class).stream()
+					.filter(it -> it.getDeclaration() == parameter).collect(Collectors.toList());
+			for (DirectReferenceExpression reference : references) {
+				Expression value = ecoreUtil.clone(argument);
+				ecoreUtil.replace(value, reference);
 			}
+			
+			ecoreUtil.remove(parameter);
 		}
 	}
 	
@@ -750,8 +770,16 @@ public class ExpressionUtil {
 	
 	public void addAnnotation(VariableDeclaration variable, VariableDeclarationAnnotation annotation) {
 		if (variable != null) {
-			variable.getAnnotations().add(annotation);
+			List<VariableDeclarationAnnotation> annotations = variable.getAnnotations();
+			annotations.add(annotation);
 		}
+	}
+	
+	public boolean hasAnnotation(VariableDeclaration variable,
+			Class<? extends VariableDeclarationAnnotation> annotationClass) {
+		List<VariableDeclarationAnnotation> annotations = variable.getAnnotations();
+		return annotations.stream()
+				.anyMatch(it -> annotationClass.isInstance(it));
 	}
 	
 	public void removeVariableDeclarationAnnotations(
@@ -848,6 +876,31 @@ public class ExpressionUtil {
 		return ifThenElseExpression;
 	}
 	
+	public IfThenElseExpression weave(Collection<? extends IfThenElseExpression> expressions) {
+		IfThenElseExpression first = null;
+		IfThenElseExpression last = null;
+		for (IfThenElseExpression expression : expressions) {
+			if (first == null) {
+				first = expression;
+			}
+			if (last != null) {
+				if (last.getElse() != null) {
+					throw new IllegalArgumentException("Not null else: " + expression);
+				}
+				last.setElse(expression);
+			}
+			last = expression;
+		}
+		// Replacing last if-then-else if else is null, otherwise there would be "null" branch
+		if (last.getElse() == null) {
+			Expression then = last.getThen();
+			ecoreUtil.replace(then, last);
+		}
+		//
+		
+		return first;
+	}
+	
 	public DirectReferenceExpression createReferenceExpression(Declaration declaration) {
 		DirectReferenceExpression reference = factory.createDirectReferenceExpression();
 		reference.setDeclaration(declaration);
@@ -918,7 +971,8 @@ public class ExpressionUtil {
 	
 	public Expression createDefaultExpression(Collection<? extends Expression> expressions) {
 		Expression orExpression = wrapIntoOrExpression(expressions);
-		NotExpression notExpression = createNotExpression(unwrapIfPossible(orExpression));
+		NotExpression notExpression = createNotExpression(
+				unwrapIfPossible(orExpression));
 		return notExpression;
 	}
 	
@@ -996,7 +1050,8 @@ public class ExpressionUtil {
 			MultiaryExpression container) {
 		ecoreUtil.replace(container, expression);
 		container.getOperands().add(expression);
-		container.getOperands().add(ecoreUtil.clone(expression));
+		container.getOperands().add(
+				ecoreUtil.clone(expression));
 		return container;
 	}
 	
@@ -1026,8 +1081,10 @@ public class ExpressionUtil {
 		TypeDefinition typeDefinition = ExpressionModelDerivedFeatures.getTypeDefinition(queue);
 		if (typeDefinition instanceof ArrayTypeDefinition) {
 			ArrayAccessExpression accessExpression = factory.createArrayAccessExpression();
-			accessExpression.setOperand(createReferenceExpression(queue));
-			accessExpression.setIndex(toIntegerLiteral(0));
+			accessExpression.setOperand(
+					createReferenceExpression(queue));
+			accessExpression.setIndex(
+					toIntegerLiteral(0));
 			return accessExpression;
 		}
 		throw new IllegalArgumentException("Not an array: " + queue);

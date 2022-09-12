@@ -1,3 +1,13 @@
+/********************************************************************************
+ * Copyright (c) 2020-2022 Contributors to the Gamma project
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * SPDX-License-Identifier: EPL-1.0
+ ********************************************************************************/
 package hu.bme.mit.gamma.lowlevel.xsts.transformation
 
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
@@ -71,7 +81,7 @@ class HierarchicalTransitionMerger extends AbstractTransitionMerger {
 	}
 	
 	private def Action mergeAllTransitionsOfRegion(CompositeElement element,
-			Map<Region, Action> regionActions) {
+			Map<Region, ? extends Action> regionActions) {
 		val lowlevelRegions = element.regions
 		
 		if (lowlevelRegions.empty) {
@@ -105,11 +115,10 @@ class HierarchicalTransitionMerger extends AbstractTransitionMerger {
 					
 			return xStsSequentialAction
 		}
-		
 	}
 	
 	private def Action mergeAllTransitionsOfRegion(Region region,
-			Map<Region, Action> regionActions) {
+			Map<Region, ? extends Action> regionActions) {
 		val lowlevelStatechart = region.statechart
 		val lowlevelSchedulingOrder = lowlevelStatechart.schedulingOrder
 		
@@ -155,6 +164,8 @@ class HierarchicalTransitionMerger extends AbstractTransitionMerger {
 		val lowlevelStates = lowlevelRegion.states
 		val arePrioritiesUnique = lowlevelStates.forall[
 				it.outgoingTransitions.arePrioritiesUnique]
+		val arePrioritiesSame = lowlevelStates.forall[
+				it.outgoingTransitions.arePrioritiesSame]
 				
 		// Simple outgoing transitions
 		for (lowlevelState : lowlevelStates) {
@@ -189,32 +200,67 @@ class HierarchicalTransitionMerger extends AbstractTransitionMerger {
 		val xStsActions = xStsTransitions.values.flatten.map[it.action]
 				.filter(SequentialAction).toList
 		if (xStsActions.empty) {
-			return createEmptyAction
+			// If there are regions with no behavior (e.g., single state without transitions)
+//			return createEmptyAction
+			// Other methods can handle only IfActions and NonDeterministicActions
+			return createFalseExpression.createIfAction(
+					createEmptyAction, createEmptyAction)
 		}
 		else if (arePrioritiesUnique) {
 			return xStsActions.createIfAction
 			// The last else branch must be extended by the caller
 		}
-		else {
+		else if (arePrioritiesSame) {
 			return xStsActions.createChoiceAction
 			// The default branch must be extended by the caller
 		}
+		else {
+			// Not completely unique but there are different priorities
+			val exclusiveChoices = newArrayList
+			for (priority : xStsTransitions.keySet) {
+				val xStsSamePriorityActions = xStsTransitions.get(priority)
+						.map[it.action]
+				val choiceAction = xStsSamePriorityActions.createChoiceAction
+				val precondition = choiceAction.precondition
+				exclusiveChoices += precondition.createChoiceSequentialAction(choiceAction)
+			}
+			return exclusiveChoices.createIfAction
+			// The last else branch must be extended by the caller
+		}
 	}
 	
-	private def injectExecutedVariableAnnotation(Action action, VariableDeclaration execVariable) {
+	private def void injectExecutedVariableAnnotation(Action action, VariableDeclaration execVariable) {
 		val execSetting = execVariable.createAssignmentAction(createTrueExpression)
 		if (action instanceof IfAction) {
-			val ifActions = action.getSelfAndAllContentsOfType(IfAction)
-			for (ifAction : ifActions) {
-				val then = ifAction.then
+//			val ifActions = action.getSelfAndAllContentsOfType(IfAction)
+//			for (ifAction : ifActions) {
+				val then = action.then
 				then.appendToAction(execSetting)
-			}
+				// Recursion for prioritized transitions
+				val _else = action.^else
+				if (!_else.nullOrEmptyAction) {
+					_else.injectExecutedVariableAnnotation(execVariable)
+				}
+				// Note that we do not add this exec into the last "else"
+//			}
 		}
 		else if (action instanceof NonDeterministicAction) {
+			// No default branches yet because this method is called before 'extendElse'
+//			val branches = newArrayList
+//			branches += action.actions
+//			if (choicesWithDefaultBranch.contains(action)) {
+//				branches.remove(branches.size - 1)
+//			}
+			checkState(!choicesWithDefaultBranch.contains(action))
 			for (branch : action.actions) {
 				branch.appendToAction(execSetting)
 			}
 		}
+//		else if (action instanceof EmptyAction) {
+//			// If there are regions with no behavior (e.g., single state without transitions)
+//			// Not correct as we can handle only IfActions and NonDeterministicActions
+//			execSetting.replace(action)
+//		}
 		else {
 			throw new IllegalArgumentException("Not known action: " + action)
 		}
@@ -224,11 +270,20 @@ class HierarchicalTransitionMerger extends AbstractTransitionMerger {
 		// Extendable is either an If, NonDet or a Sequential with an If at the end
 		// See mergeAllTransitionsOfRegion(CompositeElement element...
 		if (extendable instanceof IfAction) {
-			extendable.append(action) // See the referenced method
+			// We must do this manually, and not using extendable.append(action)
+			// as in the last else, there may be a Sequential with an If at the end
+			val _else = extendable.^else
+			if (_else.nullOrEmptyAction) {
+				extendable.append(action) // See the referenced method
+			}
+			else {
+				_else.extendElse(action) // Recursion to potentially get to the Seq part
+			}
 		}
 		else if (extendable instanceof NonDeterministicAction) {
 			extendable.extendChoiceWithDefaultBranch(action)
 			// Can the same NonDeterministicAction be extended multiple times?
+			checkState(!choicesWithDefaultBranch.contains(extendable))
 			choicesWithDefaultBranch += extendable
 		}
 		else if (extendable instanceof SequentialAction) {
@@ -245,6 +300,11 @@ class HierarchicalTransitionMerger extends AbstractTransitionMerger {
 				thenAction.extendElse(action)
 			}
 		}
+//		else if (action instanceof EmptyAction) {
+//			// If there are regions with no behavior (e.g., single state without transitions)
+//			// Not correct as we can handle only IfActions and NonDeterministicActions
+//			execSetting.replace(action)
+//		}
 		else {
 			throw new IllegalArgumentException("Not known action: " + extendable)
 		}

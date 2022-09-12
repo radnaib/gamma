@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2021 Contributors to the Gamma project
+ * Copyright (c) 2018-2022 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -55,6 +55,7 @@ import hu.bme.mit.gamma.expression.model.ModExpression;
 import hu.bme.mit.gamma.expression.model.MultiaryExpression;
 import hu.bme.mit.gamma.expression.model.NamedElement;
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration;
+import hu.bme.mit.gamma.expression.model.ParametricElement;
 import hu.bme.mit.gamma.expression.model.PredicateExpression;
 import hu.bme.mit.gamma.expression.model.RationalLiteralExpression;
 import hu.bme.mit.gamma.expression.model.RecordAccessExpression;
@@ -150,12 +151,22 @@ public class ExpressionModelValidator {
 		return validationResultMessages;
 	}
 	
-	public Collection<ValidationResultMessage> checkArgumentTypes(ArgumentedElement element, List<ParameterDeclaration> parameterDeclarations) {
-		List<Expression> arguments = element.getArguments();
+	public Collection<ValidationResultMessage> checkArgumentTypes(
+			ArgumentedElement argumentedElement, ParametricElement parametricElement) {
+		return checkArgumentTypes(argumentedElement, parametricElement.getParameterDeclarations());
+	}
+	
+	public Collection<ValidationResultMessage> checkArgumentTypes(ArgumentedElement element,
+			List<ParameterDeclaration> parameterDeclarations) {
+		return checkArgumentTypes(element.getArguments(), parameterDeclarations);
+	}
+	
+	public Collection<ValidationResultMessage> checkArgumentTypes(List<Expression> arguments,
+			List<ParameterDeclaration> parameterDeclarations) {
 		Collection<ValidationResultMessage> validationResultMessages = new ArrayList<ValidationResultMessage>();
 		if (arguments.size() != parameterDeclarations.size()) {
 			validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
-					"The number of arguments must match the number of parameters", 
+				"The number of arguments must match the number of parameters", 
 					new ReferenceInfo(ExpressionModelPackage.Literals.ARGUMENTED_ELEMENT__ARGUMENTS)));
 			return validationResultMessages;
 		}
@@ -163,8 +174,8 @@ public class ExpressionModelValidator {
 			for (int i = 0; i < arguments.size() && i < parameterDeclarations.size(); ++i) {
 				ParameterDeclaration parameter = parameterDeclarations.get(i);
 				Expression argument = arguments.get(i);
-				validationResultMessages.addAll(checkTypeAndExpressionConformance(parameter.getType(), argument, 
-					new ReferenceInfo(ExpressionModelPackage.Literals.ARGUMENTED_ELEMENT__ARGUMENTS, i)));
+				validationResultMessages.addAll(checkTypeAndExpressionConformance(parameter.getType(),
+					argument, new ReferenceInfo(ExpressionModelPackage.Literals.ARGUMENTED_ELEMENT__ARGUMENTS, i)));
 			}
 		}
 		return validationResultMessages;
@@ -272,6 +283,24 @@ public class ExpressionModelValidator {
 			}
 			++i;
 		}
+		return validationResultMessages;
+	}
+	
+	public Collection<ValidationResultMessage> checkDirectReferenceExpression(
+				DirectReferenceExpression directReferenceExpression) {
+		Collection<ValidationResultMessage> validationResultMessages = new ArrayList<ValidationResultMessage>();
+
+		Declaration declaration = directReferenceExpression.getDeclaration();
+		if (declaration instanceof FunctionDeclaration) {
+			EObject eContainer = directReferenceExpression.eContainer();
+			if (!(eContainer instanceof FunctionAccessExpression)) {
+				validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
+					"No arguments are given in this function reference", 
+						new ReferenceInfo(ExpressionModelPackage.Literals.DIRECT_REFERENCE_EXPRESSION__DECLARATION)));
+				
+			}
+		}
+		
 		return validationResultMessages;
 	}
 	
@@ -530,7 +559,7 @@ public class ExpressionModelValidator {
 					}
 					else {
 						validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
-								"The right hand side must be of type array literal", 
+							"The right hand side must be of type array literal", 
 								new ReferenceInfo(ExpressionModelPackage.Literals.INITIALIZABLE_ELEMENT__EXPRESSION)));
 					}
 				}
@@ -547,13 +576,13 @@ public class ExpressionModelValidator {
 			// The size of the array must be given as an integer
 			if (!typeDeterminator.isInteger(arrayType.getSize())) {
 				validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
-						"The size of the array must be given as an integer",
+					"The size of the array must be given as an integer",
 						new ReferenceInfo(ExpressionModelPackage.Literals.ARRAY_TYPE_DEFINITION__SIZE)));
 			}
 			// Array initial size must be greater than 0
 			if (expressionEvaluator.evaluateInteger(arrayType.getSize()) <= 0) {
 				validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
-						"The size of the array must be greater than 0",
+					"The size of the array must be greater than 0",
 						new ReferenceInfo(ExpressionModelPackage.Literals.ARRAY_TYPE_DEFINITION__SIZE)));
 			}
 		} catch (Exception exception) {
@@ -575,13 +604,13 @@ public class ExpressionModelValidator {
 					// EqualityExpression
 					if (equivalenceExpression instanceof EqualityExpression) {
 						validationResultMessages.add(new ValidationResultMessage(ValidationResult.INFO,
-								"This expression is always true, because the left and right hand sides are same",
+							"This expression is always true, because the left and right hand sides are same",
 								new ReferenceInfo(ExpressionModelPackage.Literals.BINARY_EXPRESSION__RIGHT_OPERAND)));
 					}
 					// InequalityExpression
 					if (equivalenceExpression instanceof InequalityExpression) {
 						validationResultMessages.add(new ValidationResultMessage(ValidationResult.INFO,
-								"This expression is always false, because the left and right hand sides are same",
+							"This expression is always false, because the left and right hand sides are same",
 								new ReferenceInfo(ExpressionModelPackage.Literals.BINARY_EXPRESSION__RIGHT_OPERAND)));
 					}
 				}
@@ -590,12 +619,12 @@ public class ExpressionModelValidator {
 					ComparisonExpression comparisionExpression = (ComparisonExpression) expression;
 					if (comparisionExpression instanceof LessEqualExpression || comparisionExpression instanceof GreaterEqualExpression) {
 						validationResultMessages.add(new ValidationResultMessage(ValidationResult.INFO,
-								"This expression is always true, because the left and right hand sides are same",
+							"This expression is always true, because the left and right hand sides are same",
 								new ReferenceInfo(ExpressionModelPackage.Literals.BINARY_EXPRESSION__RIGHT_OPERAND)));
 					}
 					if (comparisionExpression instanceof LessExpression || comparisionExpression instanceof GreaterExpression) {
 						validationResultMessages.add(new ValidationResultMessage(ValidationResult.INFO,
-								"This expression is always false, because the left and right hand sides are same",
+							"This expression is always false, because the left and right hand sides are same",
 								new ReferenceInfo(ExpressionModelPackage.Literals.BINARY_EXPRESSION__RIGHT_OPERAND)));
 					}
 				}
@@ -616,7 +645,7 @@ public class ExpressionModelValidator {
 					// Right hand side is zero
 					if (expressionEvaluator.evaluateInteger(binaryExpression.getRightOperand()) == 0) {
 						validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
-								"Division by zero is not allowed",
+							"Division by zero is not allowed",
 								new ReferenceInfo(ExpressionModelPackage.Literals.BINARY_EXPRESSION__RIGHT_OPERAND)));
 					}
 				}
@@ -705,13 +734,13 @@ public class ExpressionModelValidator {
 			// This field has no value
 			if (counter == 0) {
 				validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
-						"All fields in the definition must have a value",
+					"All fields in the definition must have a value",
 						new ReferenceInfo(ExpressionModelPackage.Literals.RECORD_LITERAL_EXPRESSION__FIELD_ASSIGNMENTS)));
 			}
 			// This field has more than once value
 			if (counter >= 2) {
 				validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
-						"You cannot add value to a field more than once",
+					"You cannot add value to a field more than once",
 						new ReferenceInfo(ExpressionModelPackage.Literals.RECORD_LITERAL_EXPRESSION__FIELD_ASSIGNMENTS)));
 			}
 		}
@@ -794,6 +823,9 @@ public class ExpressionModelValidator {
 		private EStructuralFeature reference;
 		private EObject source;
 		private Integer index;
+		//
+		protected final GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE;
+		//
 		
 		public ReferenceInfo(EStructuralFeature reference){
 			this(reference, null, null);
@@ -811,6 +843,14 @@ public class ExpressionModelValidator {
 			this.reference = reference;
 			this.index = index;
 			this.source = source;
+		}
+		
+		public ReferenceInfo(EObject object) {
+			this.source = object.eContainer();
+			this.reference = object.eContainingFeature();
+			if (reference.isMany()) {
+				this.index = ecoreUtil.getIndex(object);
+			}
 		}
 		
 		public boolean hasSource() {
