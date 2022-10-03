@@ -19,6 +19,10 @@ class Namings {
 	def static String getInEventName(String scxmlEventName) '''in_«scxmlEventName»'''
 	def static String getOutEventName(String scxmlEventName) '''out_«scxmlEventName»'''
 	
+	def static String getAdapterName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»Adapter'''
+	def static String getInternalEventQueueName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»InternalEventQueue'''
+	def static String getExternalEventQueueName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»ExternalEventQueue'''
+	
 	def static String getStatechartName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»'''
 	def static String getRegionName(String scxmlElementName) '''«scxmlElementName»Region'''
 	

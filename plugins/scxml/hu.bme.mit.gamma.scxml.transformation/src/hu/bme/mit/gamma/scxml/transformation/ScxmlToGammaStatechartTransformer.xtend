@@ -9,11 +9,16 @@ import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
 import ac.soton.scxml.TransitionTypeDatatype
+import hu.bme.mit.gamma.statechart.composite.AsynchronousAdapter
+import hu.bme.mit.gamma.statechart.composite.ControlFunction
+import hu.bme.mit.gamma.statechart.composite.DiscardStrategy
+import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures
 import hu.bme.mit.gamma.statechart.statechart.EntryState
 import hu.bme.mit.gamma.statechart.statechart.InitialState
 import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
+import java.math.BigInteger
 import java.util.logging.Level
 
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
@@ -30,6 +35,9 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	// Root element of the SCXML statechart model to transform
 	protected final ScxmlScxmlType scxmlRoot
 	
+	// Asynchronous wrapper component around the synchronous statechart definition
+	protected AsynchronousAdapter adapter
+	
 	// Root element of the Gamma statechart definition as the transformation result
 	protected final SynchronousStatechartDefinition gammaStatechart
 	
@@ -43,6 +51,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		super(traceability)
 		
 		this.scxmlRoot = scxmlRoot
+		this.adapter = null
 		this.gammaStatechart = createSynchronousStatechartDefinition => [
 			it.name = getStatechartName(scxmlRoot)
 		]
@@ -130,7 +139,57 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 		gammaStatechart.ports += traceability.defaultInterfacePorts.values
 		gammaStatechart.ports += traceability.ports.values
 		
+		val adapter = wrapIntoAdapter
+		traceability.adapter = adapter
+		
 		return traceability
+	}
+	
+	protected def AsynchronousAdapter wrapIntoAdapter() {
+		adapter = gammaStatechart.wrapIntoAdapter(getAdapterName(scxmlRoot))
+		
+		// Set control specification
+		val controlSpecification = compositeModelFactory.createControlSpecification
+		controlSpecification.trigger = interfaceModelFactory.createAnyTrigger
+		controlSpecification.controlFunction = ControlFunction.RUN_ONCE
+		
+		adapter.controlSpecifications += controlSpecification
+		
+		// Create internal event queue
+		// TODO Check capacity and priority
+		val internalEventQueue = compositeModelFactory.createMessageQueue
+		internalEventQueue.name = getInternalEventQueueName(scxmlRoot)
+		internalEventQueue.eventDiscardStrategy = DiscardStrategy.INCOMING
+		internalEventQueue.priority = BigInteger.TWO
+		internalEventQueue.capacity = expressionUtil.toIntegerLiteral(10)
+		
+		// TODO Add only internal ports
+		for (port : StatechartModelDerivedFeatures.getAllPortsWithInput(gammaStatechart)) {
+			val reference = statechartModelFactory.createAnyPortEventReference
+			reference.port = port
+			internalEventQueue.eventReferences += reference
+		}
+		
+		adapter.messageQueues += internalEventQueue
+		
+		// Create external event queue
+		// TODO Check capacity and priority
+		val externalEventQueue = compositeModelFactory.createMessageQueue
+		externalEventQueue.name = getExternalEventQueueName(scxmlRoot)
+		externalEventQueue.eventDiscardStrategy = DiscardStrategy.INCOMING
+		externalEventQueue.priority = BigInteger.ONE
+		externalEventQueue.capacity = expressionUtil.toIntegerLiteral(10)
+		
+		// TODO Add only external ports
+		for (port : StatechartModelDerivedFeatures.getAllPortsWithInput(gammaStatechart)) {
+			val reference = statechartModelFactory.createAnyPortEventReference
+			reference.port = port
+			externalEventQueue.eventReferences += reference
+		}
+		
+		adapter.messageQueues.add(externalEventQueue)
+		
+		return adapter
 	}
 	
 	protected def State transformParallel(ScxmlParallelType parallelNode) {

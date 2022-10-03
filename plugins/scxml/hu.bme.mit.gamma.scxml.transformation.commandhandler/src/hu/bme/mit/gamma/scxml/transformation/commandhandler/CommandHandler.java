@@ -19,6 +19,7 @@ import org.eclipse.ui.handlers.HandlerUtil;
 import ac.soton.scxml.ScxmlScxmlType;
 import hu.bme.mit.gamma.scxml.transformation.ScxmlToGammaStatechartTransformer;
 import hu.bme.mit.gamma.scxml.transformation.Traceability;
+import hu.bme.mit.gamma.statechart.composite.AsynchronousAdapter;
 import hu.bme.mit.gamma.statechart.interface_.Interface;
 import hu.bme.mit.gamma.statechart.interface_.Package;
 import hu.bme.mit.gamma.statechart.language.ui.serializer.StatechartLanguageSerializer;
@@ -65,8 +66,13 @@ public class CommandHandler extends AbstractHandler {
 						gammaInterfaces.remove(0);
 						gammaInterfacePackage.getInterfaces().addAll(gammaInterfaces);
 						
+						// Pack and serialize statechart
 						StatechartDefinition statechartDefinition = traceability.getStatechartDefinition(scxmlRoot);
-						Package gammaComponentPackage = statechartUtil.wrapIntoPackageAndAddImports(statechartDefinition);
+						Package gammaStatechartPackage = statechartUtil.wrapIntoPackageAndAddImports(statechartDefinition);
+						
+						// Pack and serialize adapter
+						AsynchronousAdapter adapter = traceability.getAdapter();
+						Package gammaAdapterPackage = statechartUtil.wrapIntoPackageAndAddImports(adapter);
 						
 						StatechartLanguageSerializer packageSerializer = new StatechartLanguageSerializer();
 						logger.log(Level.INFO, "Start serializing Gamma packages...");
@@ -74,8 +80,11 @@ public class CommandHandler extends AbstractHandler {
 						String declarationsPackageFileName = extensionlessFileName + "Declarations.gcd";
 						packageSerializer.serialize(gammaInterfacePackage, parentPath, declarationsPackageFileName);
 						
-						String componentPackageFileName = extensionlessFileName + ".gcd";
-						packageSerializer.serialize(gammaComponentPackage, parentPath, componentPackageFileName);
+						String statechartPackageFileName = extensionlessFileName + ".gcd";
+						packageSerializer.serialize(gammaStatechartPackage, parentPath, statechartPackageFileName);
+						
+						String adapterPackageFileName = extensionlessFileName + "Adapter.gcd";
+						packageSerializer.serialize(gammaAdapterPackage, parentPath, adapterPackageFileName);
 						
 						logger.log(Level.INFO, "The SCXML - Gamma statechart transformation has finished.");
 						

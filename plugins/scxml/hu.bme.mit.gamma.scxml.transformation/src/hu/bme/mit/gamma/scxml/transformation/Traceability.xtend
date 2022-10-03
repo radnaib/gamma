@@ -10,6 +10,7 @@ import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
 import hu.bme.mit.gamma.expression.model.Declaration
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
+import hu.bme.mit.gamma.statechart.composite.AsynchronousAdapter
 import hu.bme.mit.gamma.statechart.interface_.Event
 import hu.bme.mit.gamma.statechart.interface_.Interface
 import hu.bme.mit.gamma.statechart.interface_.Port
@@ -21,10 +22,10 @@ import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import java.util.Map
+import java.util.Set
 import org.eclipse.emf.ecore.EObject
 
 import static com.google.common.base.Preconditions.checkNotNull
-import java.util.Set
 
 class Traceability {
 
@@ -33,6 +34,7 @@ class Traceability {
 	// ScxmlScxmlType - SynchronousStatechartDefinition pairs, but for now,
 	// we assume only one SCMXL statechart to be transformed (from an <scxml> root element).
 	protected final ScxmlScxmlType scxmlRoot
+	protected AsynchronousAdapter adapter
 
 	protected final Map<ScxmlScxmlType, SynchronousStatechartDefinition> statechartDefinitions = newHashMap
 	protected final Map<ScxmlParallelType, State> parallels = newHashMap
@@ -65,6 +67,14 @@ class Traceability {
 
 	def getScxmlRoot() {
 		return scxmlRoot
+	}
+	
+	def setAdapter(AsynchronousAdapter adapter) {
+		this.adapter = adapter
+	}
+	
+	def getAdapter() {
+		return adapter
 	}
 
 	def put(ScxmlScxmlType scxmlRoot, SynchronousStatechartDefinition gammaStatechart) {
