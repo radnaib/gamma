@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Gamma Statechart Language UI
 Bundle-Vendor: BME-FTSRG
-Bundle-Version: 2.7.0.qualifier
+Bundle-Version: 2.8.0.qualifier
 Bundle-SymbolicName: hu.bme.mit.gamma.statechart.language.ui; singleton:=true
 Bundle-ActivationPolicy: lazy
 Require-Bundle: hu.bme.mit.gamma.statechart.language,
@@ -20,7 +20,7 @@ Require-Bundle: hu.bme.mit.gamma.statechart.language,
  hu.bme.mit.gamma.expression.language.ui,
  hu.bme.mit.gamma.language.util
 Import-Package: org.apache.log4j
-Bundle-RequiredExecutionEnvironment: JavaSE-11
+Bundle-RequiredExecutionEnvironment: JavaSE-17
 Export-Package: hu.bme.mit.gamma.statechart.language.ui.contentassist,
  hu.bme.mit.gamma.statechart.language.ui.internal,
  hu.bme.mit.gamma.statechart.language.ui.quickfix,

@@ -57,6 +57,7 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 		
 		List<CommentableStateFormula> formulas = new ArrayList<CommentableStateFormula>();
 		List<PropertyPackage> propertyPackages = verification.getPropertyPackages();
+		List<PropertyPackage> savedPropertyPackages = new ArrayList<PropertyPackage>(propertyPackages);
 		
 		PropertyPackage mainPropertyPackage = null;
 		
@@ -68,7 +69,8 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 				mainPropertyPackage = ecoreUtil.clone(propertyPackage);
 			}
 			formulas.addAll(
-					propertyPackage.getFormulas());
+					ecoreUtil.clone( // To prevent destroying the original property packages
+							propertyPackage.getFormulas()));
 		}
 		propertyPackages.clear();
 		List<CommentableStateFormula> checkableFormulas = mainPropertyPackage.getFormulas();
@@ -123,7 +125,9 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 			verificationHandler.optimizeTraces();
 		}
 		verificationHandler.serializeTraces(); // Serialization in one pass
-		
+		// Reinstate original state
+		propertyPackages.clear();
+		propertyPackages.addAll(savedPropertyPackages);
 	}
 
 }
