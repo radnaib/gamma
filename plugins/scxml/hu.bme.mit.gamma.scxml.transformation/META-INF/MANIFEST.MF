@@ -4,7 +4,7 @@ Bundle-Name: SCXML To Gamma Transformation
 Bundle-SymbolicName: hu.bme.mit.gamma.scxml.transformation;singleton:=true
 Bundle-Version: 1.0.0.qualifier
 Automatic-Module-Name: hu.bme.mit.gamma.scxml.transformation
-Bundle-RequiredExecutionEnvironment: JavaSE-11
+Bundle-RequiredExecutionEnvironment: JavaSE-17
 Require-Bundle: ac.soton.scxml,
  hu.bme.mit.gamma.statechart.model,
  com.google.guava,

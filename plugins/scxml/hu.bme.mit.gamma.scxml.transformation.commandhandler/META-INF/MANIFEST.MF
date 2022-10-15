@@ -4,7 +4,7 @@ Bundle-Name: SCXML To Gamma Transformer Commandhandler
 Bundle-SymbolicName: hu.bme.mit.gamma.scxml.transformation.commandhandler;singleton:=true
 Bundle-Version: 1.0.0.qualifier
 Automatic-Module-Name: hu.bme.mit.gamma.scxml.transformation.commandhandler
-Bundle-RequiredExecutionEnvironment: JavaSE-11
+Bundle-RequiredExecutionEnvironment: JavaSE-17
 Require-Bundle: org.eclipse.core.commands,
  ac.soton.scxml,
  hu.bme.mit.gamma.scxml.transformation,
