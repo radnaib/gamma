@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Gamma Scenario Language
 Bundle-Vendor: BME-FTSRG
-Bundle-Version: 2.7.0.qualifier
+Bundle-Version: 2.8.0.qualifier
 Bundle-SymbolicName: hu.bme.mit.gamma.scenario.language; singleton:=true
 Bundle-ActivationPolicy: lazy
 Require-Bundle: org.eclipse.xtext,
@@ -16,7 +16,7 @@ Require-Bundle: org.eclipse.xtext,
  hu.bme.mit.gamma.expression.language,
  hu.bme.mit.gamma.statechart.language,
  org.eclipse.core.resources
-Bundle-RequiredExecutionEnvironment: JavaSE-11
+Bundle-RequiredExecutionEnvironment: JavaSE-17
 Export-Package: hu.bme.mit.gamma.scenario.language,
  hu.bme.mit.gamma.scenario.language.formatting,
  hu.bme.mit.gamma.scenario.language.generator,
