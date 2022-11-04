@@ -15,8 +15,6 @@ import java.util.logging.Logger
 
 abstract class AbstractTransformer {
 	
-	protected final Traceability traceability
-	
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
 	protected final extension StatechartUtil statechartUtil = StatechartUtil.INSTANCE
 	protected final extension ActionUtil actionUtil = ActionUtil.INSTANCE
@@ -32,9 +30,5 @@ abstract class AbstractTransformer {
 	protected final ExpressionTypeDeterminator2 expressionTypeDeterminator = ExpressionTypeDeterminator2.INSTANCE
 	
 	protected final Logger logger = Logger.getLogger("GammaLogger")
-	
-	new(Traceability traceability) {
-		this.traceability = traceability
-	}
 		
 }

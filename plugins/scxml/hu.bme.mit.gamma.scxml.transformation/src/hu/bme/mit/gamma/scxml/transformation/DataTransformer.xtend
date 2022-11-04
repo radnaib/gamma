@@ -4,9 +4,9 @@ import ac.soton.scxml.ScxmlDataType
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
 import java.util.logging.Level
 
-class DataTransformer extends AbstractTransformer {
+class DataTransformer extends AtomicElementTransformer {
 	
-	new(Traceability traceability) {
+	new(StatechartTraceability traceability) {
 		super(traceability)
 	}
 	

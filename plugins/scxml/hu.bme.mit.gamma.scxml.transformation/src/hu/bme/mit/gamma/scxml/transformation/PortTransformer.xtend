@@ -6,8 +6,8 @@ import static com.google.common.base.Preconditions.checkState
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
 import hu.bme.mit.gamma.statechart.interface_.Interface
 
-class PortTransformer extends AbstractTransformer {
-	new(Traceability traceability) {
+class PortTransformer extends AtomicElementTransformer {
+	new(StatechartTraceability traceability) {
 		super(traceability)
 	}
 	

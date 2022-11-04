@@ -3,13 +3,13 @@ package hu.bme.mit.gamma.scxml.transformation
 import hu.bme.mit.gamma.statechart.interface_.Interface
 import hu.bme.mit.gamma.statechart.interface_.Port
 
-class TriggerTransformer extends AbstractTransformer {
+class TriggerTransformer extends AtomicElementTransformer {
 	
 	protected final extension PortTransformer portTransformer
 	protected final extension InterfaceTransformer interfaceTransformer
 	protected final extension EventTransformer eventTransformer
 	
-	new(Traceability traceability) {
+	new(StatechartTraceability traceability) {
 		super(traceability)
 		
 		this.portTransformer = new PortTransformer(traceability)

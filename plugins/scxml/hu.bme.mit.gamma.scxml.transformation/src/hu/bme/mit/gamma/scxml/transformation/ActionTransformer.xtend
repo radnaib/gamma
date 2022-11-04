@@ -12,14 +12,14 @@ import hu.bme.mit.gamma.statechart.interface_.Port
 import java.util.logging.Level
 import org.eclipse.emf.ecore.EObject
 
-class ActionTransformer extends AbstractTransformer {
+class ActionTransformer extends AtomicElementTransformer {
 	
 	protected final extension PortTransformer portTransformer
 	protected final extension InterfaceTransformer interfaceTransformer
 	protected final extension EventTransformer eventTransformer
 	protected final extension ScxmlGammaExpressionTransformer expressionTransformer
 	
-	new(Traceability traceability) {
+	new(StatechartTraceability traceability) {
 		super(traceability)
 		
 		this.portTransformer = new PortTransformer(traceability)

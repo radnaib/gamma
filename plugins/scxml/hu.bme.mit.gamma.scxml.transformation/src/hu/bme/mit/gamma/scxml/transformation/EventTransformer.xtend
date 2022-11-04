@@ -5,8 +5,8 @@ import hu.bme.mit.gamma.statechart.interface_.EventDirection
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
 import hu.bme.mit.gamma.statechart.interface_.Interface
 
-class EventTransformer extends AbstractTransformer {
-	new(Traceability traceability) {
+class EventTransformer extends AtomicElementTransformer {
+	new(StatechartTraceability traceability) {
 		super(traceability)
 	}
 	

@@ -3,8 +3,8 @@ package hu.bme.mit.gamma.scxml.transformation
 import static com.google.common.base.Preconditions.checkState
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
 
-class InterfaceTransformer extends AbstractTransformer {
-	new(Traceability traceability) {
+class InterfaceTransformer extends AtomicElementTransformer {
+	new(StatechartTraceability traceability) {
 		super(traceability)
 	}
 	

@@ -27,16 +27,13 @@ import org.eclipse.emf.ecore.EObject
 
 import static com.google.common.base.Preconditions.checkNotNull
 
-class Traceability {
+class StatechartTraceability {
 
-	// Root element of the SCXML statechart model to transform.
-	// This Traceability class could be able to store multiple
-	// ScxmlScxmlType - SynchronousStatechartDefinition pairs, but for now,
-	// we assume only one SCMXL statechart to be transformed (from an <scxml> root element).
+	// Root element of the atomic SCXML statechart model to transform.
 	protected final ScxmlScxmlType scxmlRoot
+	protected SynchronousStatechartDefinition statechart
 	protected AsynchronousAdapter adapter
-
-	protected final Map<ScxmlScxmlType, SynchronousStatechartDefinition> statechartDefinitions = newHashMap
+	
 	protected final Map<ScxmlParallelType, State> parallels = newHashMap
 	protected final Map<ScxmlStateType, State> states = newHashMap
 	protected final Map<ScxmlFinalType, State> finals = newHashMap
@@ -50,19 +47,29 @@ class Traceability {
 	// Works only if variables are globally unique and have a global scope
 	protected final Map<String, VariableDeclaration> variables = newHashMap
 	
+	// Internal mappings (internal to the statechart)
 	protected Port defaultPort
 	protected Interface defaultInterface
 	protected final Map<Interface, Port> defaultInterfacePorts = newHashMap
 	protected final Map<String, Port> ports = newHashMap
-	protected final Map<String, Interface> interfaces = newHashMap
-	protected final Map<Pair<Interface, String>, Event> inEvents = newHashMap
-	protected final Map<Pair<Interface, String>, Event> outEvents = newHashMap
+	
+	// Global mappings (from composite traceability)
+	protected final Map<String, Interface> interfaces
+	protected final Map<Pair<Interface, String>, Event> inEvents
+	protected final Map<Pair<Interface, String>, Event> outEvents
 
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
 	
 	// <scxml> - Synchronous Statechart Definition
-	new(ScxmlScxmlType scxmlRoot) {
+	new(ScxmlScxmlType scxmlRoot,
+		Map<String, Interface> interfaces,
+		Map<Pair<Interface, String>, Event> inEvents,
+		Map<Pair<Interface, String>, Event> outEvents
+	) {
 		this.scxmlRoot = scxmlRoot
+		this.interfaces = interfaces
+		this.inEvents = inEvents
+		this.outEvents = outEvents
 	}
 
 	def getScxmlRoot() {
@@ -77,17 +84,13 @@ class Traceability {
 		return adapter
 	}
 
-	def put(ScxmlScxmlType scxmlRoot, SynchronousStatechartDefinition gammaStatechart) {
-		checkNotNull(scxmlRoot)
+	def setStatechart(SynchronousStatechartDefinition gammaStatechart) {
 		checkNotNull(gammaStatechart)
-		statechartDefinitions += scxmlRoot -> gammaStatechart
+		statechart = gammaStatechart
 	}
 
-	def getStatechartDefinition(ScxmlScxmlType scxmlRoot) {
-		checkNotNull(scxmlRoot)
-		val gammaStatechart = statechartDefinitions.get(scxmlRoot)
-		checkNotNull(gammaStatechart)
-		return gammaStatechart
+	def getStatechart() {
+		return statechart
 	}
 
 	// <parallel> - State (with orthogonal Region children)

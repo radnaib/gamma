@@ -19,14 +19,15 @@ import hu.bme.mit.gamma.statechart.statechart.State
 import hu.bme.mit.gamma.statechart.statechart.SynchronousStatechartDefinition
 import hu.bme.mit.gamma.statechart.statechart.Transition
 import java.math.BigInteger
-import java.util.logging.Level
+import java.util.logging.Logger
 
 import static ac.soton.scxml.ScxmlModelDerivedFeatures.*
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
+import java.util.logging.Level
 
 // TODO Scoping in variable transformation and assignment
 // TODO History, parallel
-class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
+class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 	
 	protected final extension ActionTransformer actionTransformer
 	protected final extension DataTransformer dataTransformer
@@ -41,13 +42,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	// Root element of the Gamma statechart definition as the transformation result
 	protected final SynchronousStatechartDefinition gammaStatechart
 	
-	new(ScxmlScxmlType scxmlRoot) {
-		this(scxmlRoot,
-			new Traceability(scxmlRoot)
-		)
-	}
-	
-	new(ScxmlScxmlType scxmlRoot, Traceability traceability) {
+	new(ScxmlScxmlType scxmlRoot, StatechartTraceability traceability) {
 		super(traceability)
 		
 		this.scxmlRoot = scxmlRoot
@@ -63,7 +58,7 @@ class ScxmlToGammaStatechartTransformer extends AbstractTransformer {
 	
 	// Transformation of the SCXML root element and its contents recursively
 	def execute() {
-		traceability.put(scxmlRoot, gammaStatechart)
+		traceability.setStatechart(gammaStatechart)
 				
 		logger.log(Level.INFO, "Transforming <scxml> root element (" + scxmlRoot.name + ")")
 		

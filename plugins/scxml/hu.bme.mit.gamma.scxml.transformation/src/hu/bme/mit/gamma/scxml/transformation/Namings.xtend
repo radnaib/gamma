@@ -23,6 +23,7 @@ class Namings {
 	def static String getInternalEventQueueName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»InternalEventQueue'''
 	def static String getExternalEventQueueName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»ExternalEventQueue'''
 	
+	def static String getCompositeStatechartName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»'''
 	def static String getStatechartName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»'''
 	def static String getRegionName(String scxmlElementName) '''«scxmlElementName»Region'''
 	
