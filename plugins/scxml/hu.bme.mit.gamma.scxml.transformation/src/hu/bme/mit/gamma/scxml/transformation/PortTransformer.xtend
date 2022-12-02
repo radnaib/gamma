@@ -1,14 +1,32 @@
 package hu.bme.mit.gamma.scxml.transformation
 
+import hu.bme.mit.gamma.statechart.interface_.Interface
 import hu.bme.mit.gamma.statechart.interface_.RealizationMode
 
 import static com.google.common.base.Preconditions.checkState
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
-import hu.bme.mit.gamma.statechart.interface_.Interface
 
 class PortTransformer extends AtomicElementTransformer {
+	
+	protected final extension InterfaceTransformer interfaceTransformer
+	
 	new(StatechartTraceability traceability) {
 		super(traceability)
+		
+		this.interfaceTransformer = new InterfaceTransformer(traceability)
+	}
+	
+	// Gets or creates an interface and a port realizing the interface in the specified mode.
+	def getOrTransformPort(String scxmlPortName,
+		String scxmlInterfaceName, RealizationMode realizationMode
+	) {
+		val gammaInterfaceName = getInterfaceName(scxmlInterfaceName)
+		val gammaInterface = interfaceTransformer.getOrTransformInterfaceByName(gammaInterfaceName)
+		
+		val gammaPortName = getPortName(scxmlPortName)
+		val gammaPort = getOrTransformPortByName(gammaInterface, gammaPortName, realizationMode)
+		
+		return gammaPort
 	}
 	
 	def getOrCreateDefaultPort() {
@@ -64,23 +82,28 @@ class PortTransformer extends AtomicElementTransformer {
 		return gammaPort
 	}
 	
-	def getOrTransformPortByName(Interface gammaInterface, String portName) {
+	def getOrTransformPortByName(Interface gammaInterface,
+		String portName, RealizationMode realizationMode
+	) {
 		checkState(gammaInterface !== null)
 		checkState(portName !== null)
+		checkState(realizationMode !== null)
+		
 		if (traceability.containsPort(portName)) {
 			return traceability.getPort(portName)
 		}
 		else {
-			val gammaPort = transformPortByName(gammaInterface, portName)
+			val gammaPort = transformPortByName(gammaInterface, portName, realizationMode)
 			traceability.putPort(portName, gammaPort)
 			return gammaPort
 		}
 	}
 	
-	// For now, all ports realize their interfaces in provided mode.
-	protected def transformPortByName(Interface gammaInterface, String portName) {		
+	protected def transformPortByName(Interface gammaInterface,
+		String portName, RealizationMode realizationMode
+	) {		
 		val gammaInterfaceRealization = createInterfaceRealization
-		gammaInterfaceRealization.realizationMode = RealizationMode.PROVIDED
+		gammaInterfaceRealization.realizationMode = realizationMode
 		gammaInterfaceRealization.interface = gammaInterface
 		
 		val gammaPort = createPort

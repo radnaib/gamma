@@ -9,6 +9,7 @@ import hu.bme.mit.gamma.action.model.Action
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
 import hu.bme.mit.gamma.statechart.interface_.Interface
 import hu.bme.mit.gamma.statechart.interface_.Port
+import hu.bme.mit.gamma.statechart.interface_.RealizationMode
 import java.util.logging.Level
 import org.eclipse.emf.ecore.EObject
 
@@ -95,7 +96,7 @@ class ActionTransformer extends AtomicElementTransformer {
 			
 			if (tokens.size >= 3) {
 				val portName = tokens.head
-				gammaPort = getOrTransformPortByName(gammaInterface, portName)
+				gammaPort = getOrTransformPortByName(gammaInterface, portName, RealizationMode.PROVIDED)
 			}
 			else {
 				gammaPort = getOrTransformDefaultInterfacePort(gammaInterface)

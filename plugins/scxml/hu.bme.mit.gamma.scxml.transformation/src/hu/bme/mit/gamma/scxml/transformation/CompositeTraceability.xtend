@@ -6,10 +6,10 @@ import hu.bme.mit.gamma.statechart.composite.AsynchronousComponent
 import hu.bme.mit.gamma.statechart.composite.AsynchronousComponentInstance
 import hu.bme.mit.gamma.statechart.interface_.Event
 import hu.bme.mit.gamma.statechart.interface_.Interface
+import hu.bme.mit.gamma.statechart.interface_.Port
 import java.util.Map
 
 import static com.google.common.base.Preconditions.checkNotNull
-import org.eclipse.emf.common.util.URI
 
 class CompositeTraceability {
 	
@@ -24,6 +24,7 @@ class CompositeTraceability {
 	
 	protected final Map<String, StatechartTraceability> statecharts = newHashMap
 	protected final Map<ScxmlInvokeType, AsynchronousComponentInstance> instances = newHashMap
+	protected final Map<String, Port> ports = newHashMap
 	
 	// Global mappings: Interfaces, events, declarations
 	protected final Map<String, Interface> interfaces = newHashMap
@@ -61,9 +62,19 @@ class CompositeTraceability {
 		return statechartTraceability
 	}
 	
+	// TODO Simplify map structure and getter.
+	def getTraceabilityById(String scxmlInvokeId) {
+		checkNotNull(scxmlInvokeId)
+		val invoke = instances.keySet.findFirst[invoke | invoke.id == scxmlInvokeId]
+		checkNotNull(invoke)
+		val statechartTraceability = statecharts.filter[source, _ | source == invoke.src].values.head
+		checkNotNull(statechartTraceability)
+		return statechartTraceability
+	}
+	
 	def getTraceability(ScxmlScxmlType scxmlRoot) {
 		checkNotNull(scxmlRoot)
-		val statechartTraceability = statecharts.values.filter[it.scxmlRoot === scxmlRoot].head
+		val statechartTraceability = statecharts.values.findFirst[it.scxmlRoot === scxmlRoot]
 		checkNotNull(statechartTraceability)
 		return statechartTraceability
 	}
@@ -85,6 +96,32 @@ class CompositeTraceability {
 		val instance = instances.get(scxmlInvoke)
 		checkNotNull(instance)
 		return instance
+	}
+	
+	def getComponentInstance(String scxmlInvokeId) {
+		checkNotNull(scxmlInvokeId)
+		val instance = instances.filter[invoke, _ | invoke.id == scxmlInvokeId].values.head
+		checkNotNull(instance)
+		return instance
+	}
+	
+	// Ports by string identifier (for event strings like 'port.interface.event)
+	def putPort(String scxmlPortName, Port gammaPort) {
+		checkNotNull(scxmlPortName)
+		checkNotNull(gammaPort)
+		ports += scxmlPortName -> gammaPort
+	}
+	
+	def getPort(String scxmlPortName) {
+		checkNotNull(scxmlPortName)
+		val gammaPort = ports.get(scxmlPortName)
+		checkNotNull(gammaPort)
+		return gammaPort
+	}
+	
+	def containsPort(String scxmlPortName) {
+		checkNotNull(scxmlPortName)
+		return ports.containsKey(scxmlPortName)
 	}
 	
 	//
