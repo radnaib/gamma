@@ -203,22 +203,21 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 		controlSpecification.controlFunction = ControlFunction.RUN_ONCE
 
 		adapter.controlSpecifications += controlSpecification
-
+		
 		// Create internal event queue
-		// TODO Check capacity and priority
 		val internalEventQueue = compositeModelFactory.createMessageQueue
 		internalEventQueue.name = getInternalEventQueueName(scxmlRoot)
 		internalEventQueue.eventDiscardStrategy = DiscardStrategy.INCOMING
 		internalEventQueue.priority = BigInteger.TWO
-		internalEventQueue.capacity = expressionUtil.toIntegerLiteral(4)
+		
+		val internalCapacityReference = createDirectReferenceExpression
+		internalCapacityReference.declaration = traceability.queueCapacityDeclaration
+		internalEventQueue.capacity = internalCapacityReference
 		
 		val allStatechartPorts = StatechartModelDerivedFeatures.getAllPortsWithInput(gammaStatechart)
-		//val allInternalPorts = allStatechartPorts.filter[it | StatechartModelDerivedFeatures.isInternal(it)]
-		//val allExternalPorts = allStatechartPorts.filter[it | !StatechartModelDerivedFeatures.isInternal(it)]
-		val allInternalPorts = allStatechartPorts
-		val allExternalPorts = allStatechartPorts
+		val allInternalPorts = allStatechartPorts.filter[it | StatechartModelDerivedFeatures.isInternal(it)]
+		val allExternalPorts = allStatechartPorts.filter[it | !StatechartModelDerivedFeatures.isInternal(it)]
 		
-		// TODO Add only internal ports
 		for (port : allInternalPorts) {
 			val reference = statechartModelFactory.createAnyPortEventReference
 			reference.port = port
@@ -228,14 +227,15 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 		adapter.messageQueues += internalEventQueue
 
 		// Create external event queue
-		// TODO Check capacity and priority
 		val externalEventQueue = compositeModelFactory.createMessageQueue
 		externalEventQueue.name = getExternalEventQueueName(scxmlRoot)
 		externalEventQueue.eventDiscardStrategy = DiscardStrategy.INCOMING
 		externalEventQueue.priority = BigInteger.ONE
-		externalEventQueue.capacity = expressionUtil.toIntegerLiteral(4)
-
-		// TODO Add only external ports
+		
+		val externalCapacityReference = createDirectReferenceExpression
+		externalCapacityReference.declaration = traceability.queueCapacityDeclaration
+		externalEventQueue.capacity = externalCapacityReference
+		
 		for (port : allExternalPorts) {
 			val reference = statechartModelFactory.createAnyPortEventReference
 			reference.port = port

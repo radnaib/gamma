@@ -108,9 +108,15 @@ class ActionTransformer extends AtomicElementTransformer {
 		
 		val eventName = tokens.last
 		
-		// The action raises an event out on an interface provided by a port
-		// either it is a default interface or not.
-		val gammaEvent = getOrTransformOutEvent(gammaInterface, eventName)
+		// If a port is specified, the event will be an out event on an interface
+		// realized in provided mode by the port receiving the event.
+		// In the case of default interfaces and ports, realization mode is also provided,
+		// but the trigger events are internal.
+		val gammaEvent = if (isDefault) {
+			 getOrTransformInternalEvent(gammaInterface, eventName)
+		} else {
+			getOrTransformOutEvent(gammaInterface, eventName)
+		}
 		
 		// Event parameters are currently not supported.
 		val gammaRaise = createRaiseEventAction(gammaPort, gammaEvent, newArrayList)

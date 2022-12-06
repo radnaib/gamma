@@ -16,6 +16,7 @@ class Namings {
 	def static String getInterfaceName(String scxmlInterfaceName) '''«scxmlInterfaceName»'''
 	def static String getPortName(String scxmlPortName) '''«scxmlPortName»'''
 	
+	def static String getInternalEventName(String scxmlEventName) '''«scxmlEventName»'''
 	def static String getInEventName(String scxmlEventName) '''«scxmlEventName»'''
 	def static String getOutEventName(String scxmlEventName) '''«scxmlEventName»'''
 	

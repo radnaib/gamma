@@ -1,13 +1,29 @@
 package hu.bme.mit.gamma.scxml.transformation
 
 import hu.bme.mit.gamma.statechart.interface_.EventDirection
+import hu.bme.mit.gamma.statechart.interface_.Interface
 
 import static hu.bme.mit.gamma.scxml.transformation.Namings.*
-import hu.bme.mit.gamma.statechart.interface_.Interface
 
 class EventTransformer extends AtomicElementTransformer {
 	new(StatechartTraceability traceability) {
 		super(traceability)
+	}
+	
+	def getOrTransformInternalEvent(Interface gammaInterface, String eventName) {
+		if (traceability.containsInternalEvent(gammaInterface -> eventName)) {
+			return traceability.getInternalEvent(gammaInterface -> eventName)
+		}
+		else {
+			return transformInternalEvent(gammaInterface, eventName)
+		}
+	}
+	
+	protected def transformInternalEvent(Interface gammaInterface, String eventName) {
+		val gammaEvent = transformEvent(gammaInterface, EventDirection.INTERNAL, eventName)
+		gammaEvent.name = getInternalEventName(eventName)
+		traceability.putInternalEvent(gammaInterface -> eventName, gammaEvent)
+		return gammaEvent
 	}
 	
 	def getOrTransformInEvent(Interface gammaInterface, String eventName) {

@@ -8,6 +8,7 @@ import ac.soton.scxml.ScxmlParallelType
 import ac.soton.scxml.ScxmlScxmlType
 import ac.soton.scxml.ScxmlStateType
 import ac.soton.scxml.ScxmlTransitionType
+import hu.bme.mit.gamma.expression.model.ConstantDeclaration
 import hu.bme.mit.gamma.expression.model.Declaration
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
 import hu.bme.mit.gamma.statechart.composite.AsynchronousAdapter
@@ -33,6 +34,7 @@ class StatechartTraceability {
 	protected final ScxmlScxmlType scxmlRoot
 	protected SynchronousStatechartDefinition statechart
 	protected AsynchronousAdapter adapter
+	protected ConstantDeclaration queueCapacity
 	
 	protected final Map<ScxmlParallelType, State> parallels = newHashMap
 	protected final Map<ScxmlStateType, State> states = newHashMap
@@ -55,6 +57,7 @@ class StatechartTraceability {
 	
 	// Global mappings (from composite traceability)
 	protected final Map<String, Interface> interfaces
+	protected final Map<Pair<Interface, String>, Event> internalEvents
 	protected final Map<Pair<Interface, String>, Event> inEvents
 	protected final Map<Pair<Interface, String>, Event> outEvents
 
@@ -63,11 +66,15 @@ class StatechartTraceability {
 	// <scxml> - Synchronous Statechart Definition
 	new(ScxmlScxmlType scxmlRoot,
 		Map<String, Interface> interfaces,
+		ConstantDeclaration queueCapacity,
+		Map<Pair<Interface, String>, Event> internalEvents,
 		Map<Pair<Interface, String>, Event> inEvents,
 		Map<Pair<Interface, String>, Event> outEvents
 	) {
 		this.scxmlRoot = scxmlRoot
 		this.interfaces = interfaces
+		this.queueCapacity = queueCapacity
+		this.internalEvents = internalEvents
 		this.inEvents = inEvents
 		this.outEvents = outEvents
 	}
@@ -86,6 +93,11 @@ class StatechartTraceability {
 	
 	def getAdapter() {
 		return adapter
+	}
+	
+	def getQueueCapacityDeclaration() {
+		checkNotNull(queueCapacity)
+		return queueCapacity
 	}
 
 	def setStatechart(SynchronousStatechartDefinition gammaStatechart) {
@@ -379,6 +391,41 @@ class StatechartTraceability {
 	def containsPort(String scxmlPortName) {
 		checkNotNull(scxmlPortName)
 		return ports.containsKey(scxmlPortName)
+	}
+	
+	// Internal events by pairs of {Gamma interface; event name}
+	def putInternalEvent(Pair<Interface, String> interfaceEvent, Event gammaEvent) {
+		checkNotNull(interfaceEvent)
+		checkNotNull(interfaceEvent.key)
+		checkNotNull(interfaceEvent.value)
+		checkNotNull(gammaEvent)
+		
+		val interface = interfaceEvent.key
+		val eventName = interfaceEvent.value
+		internalEvents += (interface -> eventName) -> gammaEvent
+	}
+	
+	def getInternalEvent(Pair<Interface, String> interfaceEvent) {
+		checkNotNull(interfaceEvent)
+		checkNotNull(interfaceEvent.key)
+		checkNotNull(interfaceEvent.value)
+		
+		val interface = interfaceEvent.key
+		val eventName = interfaceEvent.value
+		val gammaEvent = internalEvents.get(interface -> eventName)
+		
+		checkNotNull(gammaEvent)
+		return gammaEvent
+	}
+	
+	def containsInternalEvent(Pair<Interface, String> interfaceEvent) {
+		checkNotNull(interfaceEvent)
+		checkNotNull(interfaceEvent.key)
+		checkNotNull(interfaceEvent.value)
+		
+		val interface = interfaceEvent.key
+		val eventName = interfaceEvent.value
+		return internalEvents.containsKey(interface -> eventName)
 	}
 	
 	// Input events by pairs of {Gamma interface; event name}

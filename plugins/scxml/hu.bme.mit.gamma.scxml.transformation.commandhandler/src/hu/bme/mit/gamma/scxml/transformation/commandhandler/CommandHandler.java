@@ -19,6 +19,7 @@ import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.ui.handlers.HandlerUtil;
 
 import ac.soton.scxml.ScxmlScxmlType;
+import hu.bme.mit.gamma.expression.model.ConstantDeclaration;
 import hu.bme.mit.gamma.scxml.transformation.CompositeTraceability;
 import hu.bme.mit.gamma.scxml.transformation.Namings;
 import hu.bme.mit.gamma.scxml.transformation.ScxmlToGammaCompositeTransformer;
@@ -72,6 +73,9 @@ public class CommandHandler extends AbstractHandler {
 						gammaInterfaces.remove(0);
 						gammaInterfacePackage.getInterfaces().addAll(gammaInterfaces);
 						
+						List<ConstantDeclaration> gammaConstants = new ArrayList<ConstantDeclaration>(traceability.getConstantDeclarations());
+						gammaInterfacePackage.getConstantDeclarations().addAll(gammaConstants);
+						
 						// Pack and serialize asynchronous component
 						AsynchronousComponent rootComponent = traceability.getRootComponent();
 						Package gammaCompositePackage = statechartUtil.wrapIntoPackage(rootComponent);
@@ -84,8 +88,11 @@ public class CommandHandler extends AbstractHandler {
 						StatechartLanguageSerializer packageSerializer = new StatechartLanguageSerializer();
 						logger.log(Level.INFO, "Start serializing Gamma packages...");
 						
+						//String declarationsPackageFileName = extensionlessFileName + "Declarations.gsm";
+						//ecoreUtil.normalSave(gammaInterfacePackage, parentPath, declarationsPackageFileName);
 						String declarationsPackageFileName = extensionlessFileName + "Declarations.gcd";
 						packageSerializer.serialize(gammaInterfacePackage, parentPath, declarationsPackageFileName);
+						
 						//String compositePackageFileName = extensionlessFileName + ".gsm";
 						//ecoreUtil.normalSave(gammaCompositePackage, parentPath, compositePackageFileName);
 						String compositePackageFileName = extensionlessFileName + ".gcd";

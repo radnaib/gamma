@@ -45,6 +45,8 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 	}
 	
 	protected def AsynchronousComponent transform(ScxmlScxmlType scxmlRoot) {
+		initQueueCapacity
+		
 		invokes = getAllInvokes(scxmlRoot)
 		
 		if (invokes.empty) {
@@ -71,6 +73,18 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 		}
 	}
 	
+	private def initQueueCapacity() {
+		// Define default queue capacity
+		val queueCapacityDeclaration = createConstantDeclaration
+		queueCapacityDeclaration.name = "QUEUE_CAPACITY"
+		
+		val capacity = expressionUtil.toIntegerLiteral(4)
+		queueCapacityDeclaration.expression = capacity
+		queueCapacityDeclaration.type = createIntegerTypeDefinition
+		
+		traceability.setQueueCapacity(queueCapacityDeclaration)
+	}
+	
 	private def loadSubcomponent(String path) {
 		val fileURI = URI.createPlatformResourceURI(path, true);
 		val documentRoot = ecoreUtil.normalLoad(fileURI);
@@ -95,7 +109,7 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 		for (invoke : invokes) {
 			val statechartTraceability = traceability.getTraceability(invoke.src)
 			
-			// TODO Extend to deeper composition hierarchy levels
+			// TODO Extend to deeper composition hierarchy levels later
 			val gammaSubcomponentType = statechartTraceability.adapter as AsynchronousComponent
 			
 			val gammaSubcomponent = gammaSubcomponentType.instantiateAsynchronousComponent
@@ -179,9 +193,7 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 		return gammaPort
 	}
 	
-	// TODO
 	protected def createBinding(ScxmlDataType bindingData) {
-		// Get binding endpoint data
 		val bindingString = bindingData.expr.trim
 		val tokens = bindingString.split("\\.|\\s*\\-\\s*")
 		if (tokens.size != 3) {
@@ -203,9 +215,7 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 		return gammaPortBinding
 	}
 	
-	// TODO
 	protected def createChannel(ScxmlDataType channelData) {
-		// Get channel endpoint data
 		val channelString = channelData.expr.trim
 		val tokens = channelString.split("\\.|\\s*\\-\\s*")
 		if (tokens.size != 4) {

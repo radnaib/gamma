@@ -55,9 +55,9 @@ class TriggerTransformer extends AtomicElementTransformer {
 		// If a port is specified, the event will be an out event on an interface
 		// realized in required mode by the port receiving the event.
 		// In the case of default interfaces and ports, realization mode is provided
-		// and trigger events flow in.
+		// and trigger events are internal.
 		val gammaEvent = if (isDefault) {
-			 getOrTransformInEvent(gammaInterface, eventName)
+			 getOrTransformInternalEvent(gammaInterface, eventName)
 		} else {
 			getOrTransformOutEvent(gammaInterface, eventName)
 		}

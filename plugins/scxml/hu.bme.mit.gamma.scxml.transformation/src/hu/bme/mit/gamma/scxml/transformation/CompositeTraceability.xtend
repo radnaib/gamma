@@ -2,11 +2,13 @@ package hu.bme.mit.gamma.scxml.transformation
 
 import ac.soton.scxml.ScxmlInvokeType
 import ac.soton.scxml.ScxmlScxmlType
+import hu.bme.mit.gamma.expression.model.ConstantDeclaration
 import hu.bme.mit.gamma.statechart.composite.AsynchronousComponent
 import hu.bme.mit.gamma.statechart.composite.AsynchronousComponentInstance
 import hu.bme.mit.gamma.statechart.interface_.Event
 import hu.bme.mit.gamma.statechart.interface_.Interface
 import hu.bme.mit.gamma.statechart.interface_.Port
+import java.util.List
 import java.util.Map
 
 import static com.google.common.base.Preconditions.checkNotNull
@@ -19,6 +21,9 @@ class CompositeTraceability {
 	// Resulting root component
 	protected AsynchronousComponent rootComponent
 	
+	// Default message quque capacity
+	protected ConstantDeclaration queueCapacity
+	
 	// TODO Add interfaces, events, ports, bindings and channels
 	// (Needed for the declarations package and serialization of the components package.)
 	
@@ -28,6 +33,7 @@ class CompositeTraceability {
 	
 	// Global mappings: Interfaces, events, declarations
 	protected final Map<String, Interface> interfaces = newHashMap
+	protected final Map<Pair<Interface, String>, Event> internalEvents = newHashMap
 	protected final Map<Pair<Interface, String>, Event> inEvents = newHashMap
 	protected final Map<Pair<Interface, String>, Event> outEvents = newHashMap
 	
@@ -46,6 +52,14 @@ class CompositeTraceability {
 	
 	def setRootComponent(AsynchronousComponent rootComponent) {
 		this.rootComponent = rootComponent
+	}
+	
+	def getQueueCapacityDeclaration() {
+		return queueCapacity
+	}
+	
+	def setQueueCapacity(ConstantDeclaration capacity) {
+		this.queueCapacity = capacity
 	}
 	
 	// String URI of the SCXML statechart definition source - Statechart Traceability
@@ -144,6 +158,10 @@ class CompositeTraceability {
 	
 	//
 	
+	def getConstantDeclarations() {
+		return List.of(queueCapacity)
+	}
+	
 	def getInterfaces() {
 		val statechartTraceabilities = statecharts.values
 		return (interfaces.values
@@ -162,7 +180,7 @@ class CompositeTraceability {
 	
 	def createStatechartTraceability(ScxmlScxmlType scxmlRoot) {
 		return new StatechartTraceability(scxmlRoot,
-			interfaces, inEvents, outEvents
+			interfaces, queueCapacity, internalEvents, inEvents, outEvents
 		)
 	}
 }
