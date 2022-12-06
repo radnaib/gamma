@@ -20,6 +20,7 @@ import org.eclipse.ui.handlers.HandlerUtil;
 
 import ac.soton.scxml.ScxmlScxmlType;
 import hu.bme.mit.gamma.scxml.transformation.CompositeTraceability;
+import hu.bme.mit.gamma.scxml.transformation.Namings;
 import hu.bme.mit.gamma.scxml.transformation.ScxmlToGammaCompositeTransformer;
 import hu.bme.mit.gamma.statechart.composite.AsynchronousComponent;
 import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures;
@@ -60,12 +61,14 @@ public class CommandHandler extends AbstractHandler {
 						ScxmlScxmlType scxmlRoot = ecoreUtil.getFirstOfAllContentsOfType(object, ScxmlScxmlType.class);
 						
 						// Model processing
-						ScxmlToGammaCompositeTransformer compositeTransformer = new ScxmlToGammaCompositeTransformer(scxmlRoot);
+						ScxmlToGammaCompositeTransformer compositeTransformer =
+								new ScxmlToGammaCompositeTransformer(scxmlRoot, path);
 						CompositeTraceability traceability = compositeTransformer.execute();
 						
 						// Interfaces and type declarations have to be explicitly serialized in another package
 						List<Interface> gammaInterfaces = new ArrayList<Interface>(traceability.getInterfaces());
 						Package gammaInterfacePackage = statechartUtil.wrapIntoPackage(gammaInterfaces.get(0));
+						gammaInterfacePackage.setName(Namings.getInterfacePackageName(scxmlRoot));
 						gammaInterfaces.remove(0);
 						gammaInterfacePackage.getInterfaces().addAll(gammaInterfaces);
 						

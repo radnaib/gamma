@@ -85,8 +85,10 @@ class ActionTransformer extends AtomicElementTransformer {
 		
 		var gammaInterface = null as Interface
 		var gammaPort = null as Port
+		var isDefault = false
 		
 		if (tokens.size == 1) {
+			isDefault = true
 			gammaInterface = getOrCreateDefaultInterface()
 			gammaPort = getOrCreateDefaultPort()
 		}
@@ -99,11 +101,15 @@ class ActionTransformer extends AtomicElementTransformer {
 				gammaPort = getOrTransformPortByName(gammaInterface, portName, RealizationMode.PROVIDED)
 			}
 			else {
+				isDefault = true
 				gammaPort = getOrTransformDefaultInterfacePort(gammaInterface)
 			}
 		}
 		
 		val eventName = tokens.last
+		
+		// The action raises an event out on an interface provided by a port
+		// either it is a default interface or not.
 		val gammaEvent = getOrTransformOutEvent(gammaInterface, eventName)
 		
 		// Event parameters are currently not supported.
@@ -115,8 +121,20 @@ class ActionTransformer extends AtomicElementTransformer {
 		logger.log(Level.INFO, "Transforming <if> element (" + scxmlIf + ")")
 		
 		// TODO
-		val gammaIf = createEmptyStatement
+		/*
+		val gammaIf = createIfStatement
+		val cond = scxmlIf.cond
+		if (!cond.nullOrEmpty) {
+			val condExpression = expressionLanguageParser.parse(cond, traceability.variables)
+			val thenExpression = scxmlIf.
+			val elseExpression = scxmlIf.
+			
+			val gammaConditional = createConditional
+			gammaIf.conditionals +=
+		}
+		*/
 		
+		val gammaIf = createEmptyStatement
 		return gammaIf
 	}
 	

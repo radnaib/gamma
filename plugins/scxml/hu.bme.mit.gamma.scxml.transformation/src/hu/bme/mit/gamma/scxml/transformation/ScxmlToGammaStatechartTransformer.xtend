@@ -211,9 +211,15 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 		internalEventQueue.eventDiscardStrategy = DiscardStrategy.INCOMING
 		internalEventQueue.priority = BigInteger.TWO
 		internalEventQueue.capacity = expressionUtil.toIntegerLiteral(4)
-
+		
+		val allStatechartPorts = StatechartModelDerivedFeatures.getAllPortsWithInput(gammaStatechart)
+		//val allInternalPorts = allStatechartPorts.filter[it | StatechartModelDerivedFeatures.isInternal(it)]
+		//val allExternalPorts = allStatechartPorts.filter[it | !StatechartModelDerivedFeatures.isInternal(it)]
+		val allInternalPorts = allStatechartPorts
+		val allExternalPorts = allStatechartPorts
+		
 		// TODO Add only internal ports
-		for (port : StatechartModelDerivedFeatures.getAllPortsWithInput(gammaStatechart)) {
+		for (port : allInternalPorts) {
 			val reference = statechartModelFactory.createAnyPortEventReference
 			reference.port = port
 			internalEventQueue.eventReferences += reference
@@ -230,7 +236,7 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 		externalEventQueue.capacity = expressionUtil.toIntegerLiteral(4)
 
 		// TODO Add only external ports
-		for (port : StatechartModelDerivedFeatures.getAllPortsWithInput(gammaStatechart)) {
+		for (port : allExternalPorts) {
 			val reference = statechartModelFactory.createAnyPortEventReference
 			reference.port = port
 			externalEventQueue.eventReferences += reference

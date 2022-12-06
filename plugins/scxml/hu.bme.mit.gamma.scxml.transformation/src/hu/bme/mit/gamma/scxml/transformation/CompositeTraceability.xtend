@@ -145,7 +145,11 @@ class CompositeTraceability {
 	//
 	
 	def getInterfaces() {
-		return interfaces.values
+		val statechartTraceabilities = statecharts.values
+		return (interfaces.values
+			+ statechartTraceabilities.map[it.defaultInterface]
+			+ statechartTraceabilities.map[it.defaultInterfacePorts.keySet].flatten
+		).toSet
 	}
 	
 	def getComponents() {

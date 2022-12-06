@@ -43,14 +43,14 @@ class PortTransformer extends AtomicElementTransformer {
 	
 	// We assume that the statechart's default interface already exists at this point.
 	protected def createDefaultPort() {
-		val defaultInterface = traceability.getDefaultInterface
+		val defaultInterface = interfaceTransformer.getOrCreateDefaultInterface
 			
 		val defaultInterfaceRealization = createInterfaceRealization
 		defaultInterfaceRealization.realizationMode = RealizationMode.PROVIDED
 		defaultInterfaceRealization.interface = defaultInterface
 			
 		val defaultPort = createPort
-		defaultPort.name = getDefaultPortName
+		defaultPort.name = getDefaultPortName(traceability.getTypeName())
 		defaultPort.interfaceRealization = defaultInterfaceRealization
 		
 		return defaultPort

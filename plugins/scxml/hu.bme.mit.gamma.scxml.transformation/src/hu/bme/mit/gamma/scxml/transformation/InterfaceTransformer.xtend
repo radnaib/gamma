@@ -22,7 +22,7 @@ class InterfaceTransformer extends AtomicElementTransformer {
 	
 	protected def createDefaultInterface() {
 		val defaultInterface = createInterface
-		val defaultInterfaceName = getDefaultInterfaceName
+		val defaultInterfaceName = getDefaultInterfaceName(traceability.getTypeName())
 		defaultInterface.name = defaultInterfaceName
 		
 		return defaultInterface

@@ -29,8 +29,10 @@ class TriggerTransformer extends AtomicElementTransformer {
 		
 		var gammaInterface = null as Interface
 		var gammaPort = null as Port
+		var isDefault = false
 		
 		if (tokens.size == 1) {
+			isDefault = true
 			gammaInterface = getOrCreateDefaultInterface()
 			gammaPort = getOrCreateDefaultPort()
 		}
@@ -40,15 +42,25 @@ class TriggerTransformer extends AtomicElementTransformer {
 			
 			if (tokens.size >= 3) {
 				val portName = tokens.head
-				gammaPort = getOrTransformPortByName(gammaInterface, portName, RealizationMode.PROVIDED)
+				gammaPort = getOrTransformPortByName(gammaInterface, portName, RealizationMode.REQUIRED)
 			}
 			else {
+				isDefault = true
 				gammaPort = getOrTransformDefaultInterfacePort(gammaInterface)
 			}
 		}
 		
 		val eventName = tokens.last
-		val gammaEvent = getOrTransformInEvent(gammaInterface, eventName)
+		
+		// If a port is specified, the event will be an out event on an interface
+		// realized in required mode by the port receiving the event.
+		// In the case of default interfaces and ports, realization mode is provided
+		// and trigger events flow in.
+		val gammaEvent = if (isDefault) {
+			 getOrTransformInEvent(gammaInterface, eventName)
+		} else {
+			getOrTransformOutEvent(gammaInterface, eventName)
+		}
 		
 		val gammaEventReference = createPortEventReference
 		gammaEventReference.port = gammaPort

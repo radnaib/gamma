@@ -19,19 +19,19 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 	
 	// Root element of the SCXML statechart model to transform
 	protected final ScxmlScxmlType scxmlRoot
+	protected final String fileURI
 	
 	// Contained <invoke> elements invoking SCXML substatecharts
 	protected List<ScxmlInvokeType> invokes
 	
-	new(ScxmlScxmlType scxmlRoot) {
-		this(scxmlRoot,
-			new CompositeTraceability(scxmlRoot)
-		)
+	new(ScxmlScxmlType scxmlRoot, String fileURI) {
+		this(scxmlRoot, new CompositeTraceability(scxmlRoot), fileURI)
 	}
 	
-	new(ScxmlScxmlType scxmlRoot, CompositeTraceability traceability) {
+	new(ScxmlScxmlType scxmlRoot, CompositeTraceability traceability, String fileURI) {
 		super(traceability)
 		this.scxmlRoot = scxmlRoot
+		this.fileURI = fileURI
 		
 		val portTraceability = traceability.createStatechartTraceability(scxmlRoot)
 		this.portTransformer = new PortTransformer(portTraceability)
@@ -48,6 +48,9 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 		invokes = getAllInvokes(scxmlRoot)
 		
 		if (invokes.empty) {
+			val statechartTraceability = traceability.createStatechartTraceability(scxmlRoot)
+			traceability.putTraceability(fileURI, statechartTraceability)
+			
 			return scxmlRoot.transformAtomic
 		}
 		else {
@@ -77,6 +80,7 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 	
 	protected def transformAtomic(ScxmlScxmlType scxmlRoot) {
 		val statechartTraceability = traceability.getTraceability(scxmlRoot)
+		
 		val statechartTransformer = new ScxmlToGammaStatechartTransformer(scxmlRoot, statechartTraceability)
 		statechartTransformer.execute
 		

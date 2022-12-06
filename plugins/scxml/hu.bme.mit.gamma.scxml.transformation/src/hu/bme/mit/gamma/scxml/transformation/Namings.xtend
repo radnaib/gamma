@@ -10,19 +10,20 @@ class Namings {
 	
 	// TODO check default names differ from user defined interface and port names
 	// at the end of the transformation
-	def static String getDefaultPortName() '''_DefaultPort'''
-	def static String getDefaultInterfaceName() '''_DefaultInterface'''
+	def static String getDefaultPortName(String instanceName) '''«instanceName»_DefaultPort'''
+	def static String getDefaultInterfaceName(String instanceName) '''«instanceName»_DefaultInterface'''
 	def static String getDefaultInterfacePortName(String scxmlInterfaceName) '''«scxmlInterfaceName»_DefaultPort'''
 	def static String getInterfaceName(String scxmlInterfaceName) '''«scxmlInterfaceName»'''
 	def static String getPortName(String scxmlPortName) '''«scxmlPortName»'''
 	
-	def static String getInEventName(String scxmlEventName) '''in_«scxmlEventName»'''
-	def static String getOutEventName(String scxmlEventName) '''out_«scxmlEventName»'''
+	def static String getInEventName(String scxmlEventName) '''«scxmlEventName»'''
+	def static String getOutEventName(String scxmlEventName) '''«scxmlEventName»'''
 	
 	def static String getAdapterName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»Adapter'''
 	def static String getInternalEventQueueName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»InternalEventQueue'''
 	def static String getExternalEventQueueName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»ExternalEventQueue'''
 	
+	def static String getInterfacePackageName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name.toLowerCase»_interfaces'''
 	def static String getCompositeStatechartName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»'''
 	def static String getStatechartName(ScxmlScxmlType scxmlRoot) '''«scxmlRoot.name»'''
 	def static String getRegionName(String scxmlElementName) '''«scxmlElementName»Region'''

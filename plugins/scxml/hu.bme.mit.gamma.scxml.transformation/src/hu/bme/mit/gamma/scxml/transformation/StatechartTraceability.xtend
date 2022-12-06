@@ -76,6 +76,10 @@ class StatechartTraceability {
 		return scxmlRoot
 	}
 	
+	def getTypeName() {
+		return scxmlRoot.name
+	}
+	
 	def setAdapter(AsynchronousAdapter adapter) {
 		this.adapter = adapter
 	}
@@ -351,6 +355,7 @@ class StatechartTraceability {
 	
 	def getAllInterfaces() {
 		var allInterfaces = interfaces.values.toList
+		allInterfaces += defaultInterfacePorts.keySet.toList
 		if (getDefaultInterface !== null) {
 			allInterfaces += getDefaultInterface
 		}
