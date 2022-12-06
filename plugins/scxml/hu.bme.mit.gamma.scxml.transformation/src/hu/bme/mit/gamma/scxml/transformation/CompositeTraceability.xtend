@@ -21,7 +21,7 @@ class CompositeTraceability {
 	// Resulting root component
 	protected AsynchronousComponent rootComponent
 	
-	// Default message quque capacity
+	// Default message queue capacity
 	protected ConstantDeclaration queueCapacity
 	
 	// TODO Add interfaces, events, ports, bindings and channels

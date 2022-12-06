@@ -196,16 +196,33 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 
 	protected def AsynchronousAdapter wrapIntoAdapter() {
 		adapter = gammaStatechart.wrapIntoAdapter(getAdapterName(scxmlRoot))
-
+		
+		val allStatechartPorts = StatechartModelDerivedFeatures.getAllPortsWithInput(gammaStatechart)
+		val allInternalPorts = allStatechartPorts.filter[it | StatechartModelDerivedFeatures.isInternal(it)]
+		val allExternalPorts = allStatechartPorts.filter[it | !StatechartModelDerivedFeatures.isInternal(it)]
+		
 		// Set control specification
-		val controlSpecification = compositeModelFactory.createControlSpecification
-		controlSpecification.trigger = interfaceModelFactory.createAnyTrigger
-		controlSpecification.controlFunction = ControlFunction.RUN_ONCE
-
-		adapter.controlSpecifications += controlSpecification
+		// TODO Check if internal port event triggers should be added as control specification triggers.
+		for (port : allExternalPorts) {
+			val portEvents = StatechartModelDerivedFeatures.getInputEvents(port)
+			for (event : portEvents) {
+				val controlSpecification = createControlSpecification
+				controlSpecification.controlFunction = ControlFunction.RUN_ONCE
+				
+				val eventReference = createPortEventReference
+				eventReference.port = port
+				eventReference.event = event
+				
+				val trigger = createEventTrigger
+				trigger.eventReference = eventReference
+				controlSpecification.trigger = trigger
+				
+				adapter.controlSpecifications += controlSpecification
+			}
+		}
 		
 		// Create internal event queue
-		val internalEventQueue = compositeModelFactory.createMessageQueue
+		val internalEventQueue = createMessageQueue
 		internalEventQueue.name = getInternalEventQueueName(scxmlRoot)
 		internalEventQueue.eventDiscardStrategy = DiscardStrategy.INCOMING
 		internalEventQueue.priority = BigInteger.TWO
@@ -214,20 +231,20 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 		internalCapacityReference.declaration = traceability.queueCapacityDeclaration
 		internalEventQueue.capacity = internalCapacityReference
 		
-		val allStatechartPorts = StatechartModelDerivedFeatures.getAllPortsWithInput(gammaStatechart)
-		val allInternalPorts = allStatechartPorts.filter[it | StatechartModelDerivedFeatures.isInternal(it)]
-		val allExternalPorts = allStatechartPorts.filter[it | !StatechartModelDerivedFeatures.isInternal(it)]
-		
 		for (port : allInternalPorts) {
-			val reference = statechartModelFactory.createAnyPortEventReference
-			reference.port = port
-			internalEventQueue.eventReferences += reference
+			val portEvents = StatechartModelDerivedFeatures.getInputEvents(port)
+			for (event : portEvents) {
+				val reference = createPortEventReference
+				reference.port = port
+				reference.event = event
+				internalEventQueue.eventReferences += reference
+			}
 		}
 
 		adapter.messageQueues += internalEventQueue
 
 		// Create external event queue
-		val externalEventQueue = compositeModelFactory.createMessageQueue
+		val externalEventQueue = createMessageQueue
 		externalEventQueue.name = getExternalEventQueueName(scxmlRoot)
 		externalEventQueue.eventDiscardStrategy = DiscardStrategy.INCOMING
 		externalEventQueue.priority = BigInteger.ONE
@@ -237,9 +254,13 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 		externalEventQueue.capacity = externalCapacityReference
 		
 		for (port : allExternalPorts) {
-			val reference = statechartModelFactory.createAnyPortEventReference
-			reference.port = port
-			externalEventQueue.eventReferences += reference
+			val portEvents = StatechartModelDerivedFeatures.getInputEvents(port)
+			for (event : portEvents) {
+				val reference = createPortEventReference
+				reference.port = port
+				reference.event = event
+				externalEventQueue.eventReferences += reference
+			}
 		}
 
 		adapter.messageQueues.add(externalEventQueue)
