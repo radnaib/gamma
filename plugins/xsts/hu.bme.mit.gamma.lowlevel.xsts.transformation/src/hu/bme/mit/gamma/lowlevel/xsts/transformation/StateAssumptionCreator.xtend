@@ -10,17 +10,18 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.lowlevel.xsts.transformation
 
-import hu.bme.mit.gamma.expression.model.Expression
 import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
 import hu.bme.mit.gamma.statechart.lowlevel.model.Region
 import hu.bme.mit.gamma.statechart.lowlevel.model.State
+import hu.bme.mit.gamma.xsts.model.XSTSModelFactory
 import hu.bme.mit.gamma.xsts.util.XstsActionUtil
 
 import static extension hu.bme.mit.gamma.statechart.lowlevel.derivedfeatures.LowlevelStatechartModelDerivedFeatures.*
 
 class StateAssumptionCreator {
 	// Model factories
-	protected final extension ExpressionModelFactory constraintFactory = ExpressionModelFactory.eINSTANCE
+	protected final extension ExpressionModelFactory expressionFactory = ExpressionModelFactory.eINSTANCE
+	protected final extension XSTSModelFactory xStsFactory = XSTSModelFactory.eINSTANCE
 	protected final extension XstsActionUtil xStsActionUtil = XstsActionUtil.INSTANCE
 	// Trace needed for variable references
 	protected final Trace trace
@@ -52,22 +53,44 @@ class StateAssumptionCreator {
 	 * and recursively all parent region variables are set to the corresponding parent state, e.g., main_region (region variable)
 	 * == Init (state enum literal) && subregion (region variable) == SubregionInit (state enum literal).
 	 */
-	protected def Expression createRecursiveXStsStateAssumption(State lowlevelState) {
-		val xStsActualStateAssumption = lowlevelState.createSingleXStsStateAssumption
-		if (lowlevelState.parentRegion.topRegion) {
-			return xStsActualStateAssumption
-		}
-		// Not a top region state, the parents need to be addressed too
-		val lowlevelParentState = lowlevelState.parentState
-		val xStsParentStateAssumptions = lowlevelParentState.createRecursiveXStsStateAssumption
-		val xStsCompositeStateAssumption = createAndExpression => [
-			it.operands += xStsParentStateAssumptions
-			it.operands += xStsActualStateAssumption
-		]
-		return xStsCompositeStateAssumption
-	}
+//	protected def Expression createRecursiveXStsStateAssumption(State lowlevelState) {
+//		val xStsActualStateAssumption = lowlevelState.createSingleXStsStateAssumption
+//		if (lowlevelState.parentRegion.topRegion) {
+//			return xStsActualStateAssumption
+//		}
+//		// Not a top region state, the parents need to be addressed too
+//		val lowlevelParentState = lowlevelState.parentState
+//		val xStsParentStateAssumptions = lowlevelParentState.createRecursiveXStsStateAssumption
+//		val xStsCompositeStateAssumption = createAndExpression => [
+//			it.operands += xStsParentStateAssumptions
+//			it.operands += xStsActualStateAssumption
+//		]
+//		return xStsCompositeStateAssumption
+//	}
+	
+	
 	
 	/// Inactive history enum literal related methods
+	
+	protected def createSingleXStsInactiveStateExpression(Region lowlevelRegion) { // Currently unused
+		val xStsInactiveHistoryEnumLiterals = trace.getXStsInactiveHistoryEnumLiterals(lowlevelRegion)
+		val xStsRegionVariable = trace.getXStsVariable(lowlevelRegion)
+		
+		val xStsInactivityPossibilities = newArrayList
+		for (xStsInactiveHistoryEnumLiteral : xStsInactiveHistoryEnumLiterals) {
+			xStsInactivityPossibilities += xStsRegionVariable.createEqualityExpression(
+					xStsInactiveHistoryEnumLiteral.createEnumerationLiteralExpression)
+		}
+		
+		return xStsInactivityPossibilities.wrapIntoOrExpression
+	}
+	
+//	protected def createSingleXStsInactiveStateAction(Region lowlevelRegion) {
+//		val xStsParentRegionVariable = trace.getXStsVariable(lowlevelRegion)
+//		val xStsExpression = lowlevelRegion.createSingleXStsInactiveActiveStateExpression
+//		
+//		return xStsParentRegionVariable.createAssignmentAction(xStsExpression)
+//	}
 	
 	protected def createSingleXStsInactiveHistoryStateAssumption(State lowlevelState) {
 		val lowlevelRegion = lowlevelState.parentRegion
@@ -135,5 +158,25 @@ class StateAssumptionCreator {
 	}
 	
 	///
+	
+	def createRegionAction() {
+		val lowlevelStatechart = trace.statechart
+		val orthogonalRegionSchedulingOrder = lowlevelStatechart.orthogonalRegionSchedulingOrder
+		switch (orthogonalRegionSchedulingOrder) {
+			case SEQUENTIAL: {
+				return createSequentialAction
+			}
+			case UNORDERED: {
+				return createUnorderedAction
+			}
+			case PARALLEL: {
+				return createParallelAction
+			}
+			default: {
+				throw new IllegalArgumentException("Not known region scheduling order: " +
+						orthogonalRegionSchedulingOrder)
+			}
+		}
+	}
 	
 }

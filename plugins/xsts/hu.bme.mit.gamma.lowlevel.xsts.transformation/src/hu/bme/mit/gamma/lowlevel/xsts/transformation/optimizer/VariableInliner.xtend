@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2021 Contributors to the Gamma project
+ * Copyright (c) 2018-2022 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -21,6 +21,7 @@ import hu.bme.mit.gamma.xsts.model.EmptyAction
 import hu.bme.mit.gamma.xsts.model.IfAction
 import hu.bme.mit.gamma.xsts.model.LoopAction
 import hu.bme.mit.gamma.xsts.model.NonDeterministicAction
+import hu.bme.mit.gamma.xsts.model.ParallelAction
 import hu.bme.mit.gamma.xsts.model.SequentialAction
 import hu.bme.mit.gamma.xsts.model.VariableDeclarationAction
 import hu.bme.mit.gamma.xsts.model.XTransition
@@ -52,9 +53,21 @@ class VariableInliner {
 	def inline(XTransition transition) {
 		transition.action.inline
 	}
-
+	
 	def inline(Action action) {
-		action.inline(newHashMap, newHashMap)
+		action.inline(null)
+	}
+
+	def inline(Action action, Action context) {
+		val concreteValues = newHashMap
+		val symbolicValues = newHashMap
+		
+		if (!context.nullOrEmptyAction) {
+			// Filling the maps with the context
+			context.inline(concreteValues, symbolicValues)
+		}
+		
+		action.inline(concreteValues, symbolicValues)
 	}
 	
 	// The concreteValues and symbolicValues sets are disjunct!
@@ -118,6 +131,24 @@ class VariableInliner {
 		for (subaction : subactions) {
 			subaction.inline(concreteValues, symbolicValues)
 		}
+	}
+	
+	protected def dispatch void inline(ParallelAction action,
+			Map<VariableDeclaration, InlineEntry> concreteValues,
+			Map<VariableDeclaration, InlineEntry> symbolicValues) {
+		val writtenVariables = action.writtenVariables
+		
+		concreteValues.keySet -= writtenVariables
+		symbolicValues.keySet -= writtenVariables
+		
+		val subactions = newArrayList
+		subactions += action.actions
+		for (subaction : subactions) {
+			subaction.inline(concreteValues, symbolicValues)
+		}
+		
+		concreteValues.keySet -= writtenVariables
+		symbolicValues.keySet -= writtenVariables
 	}
 	
 	protected def dispatch void inline(NonDeterministicAction action,
@@ -204,12 +235,13 @@ class VariableInliner {
 	protected def commonizeMaps(List<? extends Map<VariableDeclaration, InlineEntry>> branchValueList) {
 		// Calculating variables present in all branches
 		val commonVariables = newHashSet
-		for (branchValues : branchValueList) {
+		for (var i = 0; i < branchValueList.size; i++) {
+			val branchValues = branchValueList.get(i)
 			val branchVariables = branchValues.keySet
-			if (commonVariables.empty) {
+			if (i <= 0) { // First addition
 				commonVariables += branchVariables
 			}
-			else {
+			else { // Then only retains
 				commonVariables.retainAll(branchVariables)
 			}
 		}

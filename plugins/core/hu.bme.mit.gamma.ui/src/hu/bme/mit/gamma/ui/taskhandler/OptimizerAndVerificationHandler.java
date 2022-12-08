@@ -16,19 +16,28 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import org.eclipse.core.resources.IFile;
 
+import hu.bme.mit.gamma.expression.model.EnumerationLiteralDefinition;
+import hu.bme.mit.gamma.expression.model.EnumerationLiteralExpression;
 import hu.bme.mit.gamma.expression.model.VariableDeclaration;
 import hu.bme.mit.gamma.genmodel.model.AnalysisLanguage;
 import hu.bme.mit.gamma.genmodel.model.Verification;
+import hu.bme.mit.gamma.lowlevel.xsts.transformation.VariableGroupRetriever;
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.XstsOptimizer;
 import hu.bme.mit.gamma.property.derivedfeatures.PropertyModelDerivedFeatures;
 import hu.bme.mit.gamma.property.model.CommentableStateFormula;
 import hu.bme.mit.gamma.property.model.PropertyPackage;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceVariableReferenceExpression;
+import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures;
+import hu.bme.mit.gamma.statechart.interface_.Component;
+import hu.bme.mit.gamma.statechart.interface_.Package;
+import hu.bme.mit.gamma.transformation.util.GammaFileNamer;
+import hu.bme.mit.gamma.transformation.util.PropertyUnfolder;
 import hu.bme.mit.gamma.uppaal.serializer.UppaalModelSerializer;
 import hu.bme.mit.gamma.xsts.model.XSTS;
 import hu.bme.mit.gamma.xsts.transformation.SystemReducer;
@@ -40,6 +49,9 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 	
 	protected final SystemReducer xStsReducer = SystemReducer.INSTANCE;
 	protected final ActionSerializer xStsSerializer = ActionSerializer.INSTANCE;
+	protected final hu.bme.mit.gamma.xsts.promela.transformation.serializer.ModelSerializer promelaSerializer =
+			hu.bme.mit.gamma.xsts.promela.transformation.serializer.ModelSerializer.INSTANCE;
+	protected final VariableGroupRetriever variableGroupRetriever = VariableGroupRetriever.INSTANCE;
 
 	public OptimizerAndVerificationHandler(IFile file) {
 		super(file);
@@ -48,12 +60,16 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 	public void execute(Verification verification) throws IOException {
 		List<AnalysisLanguage> analysisLanguages = verification.getAnalysisLanguages();
 		checkArgument(analysisLanguages.contains(AnalysisLanguage.THETA) ||
-				analysisLanguages.contains(AnalysisLanguage.XSTS_UPPAAL));
+				analysisLanguages.contains(AnalysisLanguage.XSTS_UPPAAL) ||
+				analysisLanguages.contains(AnalysisLanguage.PROMELA));
 		
 		String analysisFilePath = verification.getFileName().get(0);
 		File analysisFile = super.exporeRelativeFile(verification, analysisFilePath);
-		String gStsFilePath = fileNamer.getEmfXStsFileName(analysisFilePath);
+		
+		String gStsFilePath = fileNamer.getEmfXStsUri(analysisFilePath);
 		File gStsFile = super.exporeRelativeFile(verification, gStsFilePath);
+		
+		Component newTopComponent = null; // See property unfolding a few lines below
 		
 		List<CommentableStateFormula> formulas = new ArrayList<CommentableStateFormula>();
 		List<PropertyPackage> propertyPackages = verification.getPropertyPackages();
@@ -61,10 +77,24 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 		
 		PropertyPackage mainPropertyPackage = null;
 		
-		checkArgument(propertyPackages.stream()
-							.allMatch(it ->  PropertyModelDerivedFeatures.isUnfolded(it)),
-					"Not all property packages are unfolded: " + propertyPackages);
 		for (PropertyPackage propertyPackage : propertyPackages) {
+			// Checking if it is unfolded
+			if (!PropertyModelDerivedFeatures.isUnfolded(propertyPackage)) {
+				if (newTopComponent == null) {
+					logger.log(Level.INFO, "Loading unfolded package for property unfolding");
+					
+					String unfoldedGsmFilePath = fileNamer.getUnfoldedPackageUri(analysisFilePath);
+					File unfoldedGsmFile = super.exporeRelativeFile(verification, unfoldedGsmFilePath);
+					
+					Package newPackage = (Package) ecoreUtil.normalLoad(unfoldedGsmFile);
+					newTopComponent = StatechartModelDerivedFeatures.getFirstComponent(newPackage);
+				}
+				PropertyUnfolder propertyUnfolder =
+						new PropertyUnfolder(propertyPackage, newTopComponent);
+				propertyPackage = propertyUnfolder.execute();
+			}
+			//
+			
 			if (mainPropertyPackage == null) {
 				mainPropertyPackage = ecoreUtil.clone(propertyPackage);
 			}
@@ -80,7 +110,7 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 		propertyPackages.add(mainPropertyPackage);
 		// As such, it is unnecessary to optimize the generated trace(s)
 		boolean isOptimize = verification.isOptimize();
-		verification.setOptimize(false);
+//		verification.setOptimize(false); // Now one by one optimization is also supported
 		
 		// A single one to store the traces and support later optimization - false: no trace serialization
 		VerificationHandler verificationHandler = new VerificationHandler(file, false);
@@ -97,11 +127,24 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 			List<ComponentInstanceVariableReferenceExpression> keepableVariableReferences =
 					ecoreUtil.getAllContentsOfType(formula,
 							ComponentInstanceVariableReferenceExpression.class); // Has to reference the unwrapped 
-			List<VariableDeclaration> keepableVariables = keepableVariableReferences.stream()
+			List<VariableDeclaration> keepableGammaVariables = keepableVariableReferences.stream()
 					.map(it -> it.getVariableDeclaration())
 					.collect(Collectors.toList());
-			// Maybe other optimizations could be added?
-			xStsReducer.deleteUnusedWrittenOnlyVariables(xSts, keepableVariables);
+			
+			xStsReducer.deleteUnusedAndWrittenOnlyVariablesExceptOutEvents(xSts, keepableGammaVariables);
+			xStsReducer.deleteUnusedInputEventVariables(xSts, keepableGammaVariables);
+			xStsReducer.deleteTrivialCodomainVariablesExceptOutEvents(xSts, keepableGammaVariables);
+			xStsReducer.deleteUnnecessaryInputVariablesExceptOutEvents(xSts, keepableGammaVariables);
+			// Deleting enum literals
+			Set<EnumerationLiteralDefinition> keepableGammaEnumLiterals =
+					ecoreUtil.getAllContentsOfType(formula, EnumerationLiteralExpression.class).stream()
+							.map(it -> it.getReference())
+							.collect(Collectors.toSet());
+			if (!analysisLanguages.contains(AnalysisLanguage.XSTS_UPPAAL)) {
+				// In UPPAAL, literals are referenced via indexes, so they cannot be removed
+				xStsReducer.deleteUnusedEnumLiteralsExceptOne(xSts, keepableGammaEnumLiterals);
+			}
+			
 			XstsOptimizer xStsOptimizer = XstsOptimizer.INSTANCE;
 			xStsOptimizer.optimizeXSts(xSts); // To remove null/empty actions
 			// Serialize XSTS
@@ -113,6 +156,15 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 				XstsToUppaalTransformer transformer = new XstsToUppaalTransformer(xSts);
 				NTA nta = transformer.execute();
 				UppaalModelSerializer.saveToXML(nta, analysisFile);
+				
+				String xStsString = xStsSerializer.serializeXsts(xSts);
+				String xStsFile = fileUtil.changeExtension(
+						analysisFile.toString(), GammaFileNamer.XSTS_XTEXT_EXTENSION);
+				fileUtil.saveString(xStsFile, xStsString);
+			}
+			if (analysisLanguages.contains(AnalysisLanguage.PROMELA)) {
+				String xStsString = promelaSerializer.serializePromela(xSts);
+				fileUtil.saveString(analysisFile, xStsString);
 			}
 			//
 			

@@ -34,22 +34,22 @@ import static extension hu.bme.mit.gamma.statechart.derivedfeatures.StatechartMo
 
 class ScenarioStatechartTraceGenerator {
 
-	val extension TraceModelFactory traceFactory = TraceModelFactory.eINSTANCE
-	val extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
-	val extension FileUtil fileUtil = FileUtil.INSTANCE
-	val extension GammaFileNamer fileNamer = GammaFileNamer.INSTANCE
-	val extension ScenarioStatechartUtil scenarioStatechartUtil = ScenarioStatechartUtil.INSTANCE
-	val extension TraceUtil traceUtil = TraceUtil.INSTANCE
+	protected final extension TraceModelFactory traceFactory = TraceModelFactory.eINSTANCE
+	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
+	protected final extension FileUtil fileUtil = FileUtil.INSTANCE
+	protected final extension GammaFileNamer fileNamer = GammaFileNamer.INSTANCE
+	protected final extension ScenarioStatechartUtil scenarioStatechartUtil = ScenarioStatechartUtil.INSTANCE
+	protected final extension TraceUtil traceUtil = TraceUtil.INSTANCE
 
-	val boolean TEST_ORIGINAL = true
+	protected final boolean TEST_ORIGINAL = true
 
-	StatechartDefinition statechart = null
-	List<Expression> arguments = newArrayList
-	var int schedulingConstraint = 0
+	protected StatechartDefinition statechart = null
+	protected List<Expression> arguments = newArrayList
+	protected int schedulingConstraint = 0
 
-	String absoluteParentFolder
+	protected String absoluteParentFolder
 
-	Package _package
+	protected Package _package
 
 	new(StatechartDefinition statechart, List<? extends Expression> arguments, int schedulingConstraint) {
 		this.statechart = statechart
@@ -60,7 +60,8 @@ class ScenarioStatechartTraceGenerator {
 
 	def List<ExecutionTrace> execute() {
 		var Component component = statechart
-		absoluteParentFolder = (statechart.eResource.file).parentFile.absolutePath
+		absoluteParentFolder = statechart.eResource.file
+				.parentFile.absolutePath
 		var NotDefinedEventMode scenarioContractType = null
 		val result = <ExecutionTrace>newArrayList
 		val annotations = statechart.annotations
@@ -93,7 +94,7 @@ class ScenarioStatechartTraceGenerator {
 		val regionName = statechart.regions.get(0).name
 		val statechartName = statechart.name.toFirstUpper
 
-		val targetStateName = statechart.hasNegatedContratStatechartAnnotation ? scenarioStatechartUtil.
+		val targetStateName = statechart.hasNegatedContractStatechartAnnotation ? scenarioStatechartUtil.
 				hotViolation : scenarioStatechartUtil.accepting
 
 		val packageFileName = fileNamer.getUnfoldedPackageFileName(fileName)
@@ -130,7 +131,7 @@ class ScenarioStatechartTraceGenerator {
 			result += trace
 		}
 
-		if (statechart.hasNegatedContratStatechartAnnotation) {
+		if (statechart.hasNegatedContractStatechartAnnotation) {
 			for (trace : result) {
 				trace.annotations += createNegativeTestAnnotation
 			}
