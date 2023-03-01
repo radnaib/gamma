@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -115,6 +115,7 @@ class ComponentTransformer {
 		
 		val name = component.name
 		val xSts = name.createXsts
+		traceability.XSts = xSts
 		
 		val eventReferenceMapper = new ReferenceToXstsVariableMapper(xSts)
 		val valueDeclarationTransformer = new ValueDeclarationTransformer
@@ -130,6 +131,7 @@ class ComponentTransformer {
 		// Transforming and saving the adapter instances
 		
 		val mergedSynchronousActions = newHashMap
+		val mergedSynchronousInitActions = newHashMap
 		
 		for (adapterInstance : adapterInstances) {
 			val adapterComponentType = adapterInstance.type as AsynchronousAdapter
@@ -142,6 +144,8 @@ class ComponentTransformer {
 			val adapterXsts = adapterComponentType.transform(lowlevelPackage)
 			xSts.merge(adapterXsts) // Adding variables, types, etc.
 			
+			mergedSynchronousInitActions += adapterInstance -> adapterXsts.initializingAction
+			// Saving the init action before the change
 			variableInitAction.actions += adapterXsts.variableInitializingTransition.action
 			configInitAction.actions += adapterXsts.configurationInitializingTransition.action
 			entryAction.actions += adapterXsts.entryEventTransition.action
@@ -191,8 +195,15 @@ class ComponentTransformer {
 					val port = portEvent.key
 					val event = portEvent.value
 					val List<MessageQueueStruct> slaveQueues = newArrayList
+					
+					// Potentially the same as port and event; makes a difference only in the case of EventPassings
+					val targetPortEvent = queue.getTargetPortEvent(portEvent)
+					val targetPort = targetPortEvent.key
+					val targetEvent = targetPortEvent.value
+					//
+					
 					// Important optimization - we create a queue only if the event is used
-					if (eventReferenceMapper.hasInputEventVariable(event, port)) {
+					if (eventReferenceMapper.hasInputEventVariable(targetEvent, targetPort)) {
 						for (parameter : event.parameterDeclarations) {
 							val parameterType = parameter.type
 							val parameterTypeDefinition = parameterType.typeDefinition
@@ -253,7 +264,10 @@ class ComponentTransformer {
 				}
 				if (masterSizeVariable !== null) { // Can be null due to potential optimization
 					val xStsMasterSizeVariable = valueDeclarationTransformer.transform(masterSizeVariable).onlyElement
+					xStsMasterSizeVariable.addDeclarationReferenceAnnotation(xStsMasterQueueVariable)
+					
 					xSts.variableDeclarations += xStsMasterSizeVariable
+					xSts.messageQueueSizeGroup.variables += xStsMasterSizeVariable
 					xStsMasterSizeVariable.addStrictControlAnnotation // Needed for loops
 				}
 				
@@ -262,16 +276,19 @@ class ComponentTransformer {
 				checkState(slaveQueueStructs.unique)
 				for (slaveQueueStruct : slaveQueueStructs) {
 					val slaveQueue = slaveQueueStruct.arrayVariable
-					val xStsSlaveQueueVariable = valueDeclarationTransformer.transform(slaveQueue)
-					xSts.variableDeclarations += xStsSlaveQueueVariable
-					xSts.slaveMessageQueueGroup.variables += xStsSlaveQueueVariable
+					val xStsSlaveQueueVariables = valueDeclarationTransformer.transform(slaveQueue)
+					xSts.variableDeclarations += xStsSlaveQueueVariables
+					xSts.slaveMessageQueueGroup.variables += xStsSlaveQueueVariables
 					if (isQueueEnvironmental) {
-						xSts.systemSlaveMessageQueueGroup.variables += xStsSlaveQueueVariable
+						xSts.systemSlaveMessageQueueGroup.variables += xStsSlaveQueueVariables
 					}
 					val slaveSizeVariable = slaveQueueStruct.sizeVariable
 					if (slaveSizeVariable !== null) {
 						val xStsSlaveSizeVariable = valueDeclarationTransformer.transform(slaveSizeVariable).onlyElement
+						xStsSlaveSizeVariable.addDeclarationReferenceAnnotation(xStsSlaveQueueVariables.head) // Not sound due to slave queue opt?
+						
 						xSts.variableDeclarations += xStsSlaveSizeVariable
+						xSts.messageQueueSizeGroup.variables += xStsSlaveSizeVariable
 						xStsSlaveSizeVariable.addStrictControlAnnotation // Needed for loops
 						// The type might not be correct here and later has to be reassigned to handle enums
 					}
@@ -329,12 +346,15 @@ class ComponentTransformer {
 				
 				val events = queue.storedEvents
 				for (portEvent : events) {
-					val port = portEvent.key
-					val event = portEvent.value
 					val eventId = queueTraceability.get(portEvent)
 					
+					val targetPortEvent = queue.getTargetPortEvent(portEvent)
+					val targetPort = targetPortEvent.key
+					val targetEvent = targetPortEvent.value
+					// Mapping source event reference to target 
+					
 					// Can be empty due to optimization or adapter event
-					val xStsInEventVariables = eventReferenceMapper.getInputEventVariables(event, port)
+					val xStsInEventVariables = eventReferenceMapper.getInputEventVariables(targetEvent, targetPort)
 					
 					val ifExpression = xStsEventIdVariable.createReferenceExpression
 							.createEqualityExpression(eventId.toIntegerLiteral)
@@ -347,7 +367,7 @@ class ComponentTransformer {
 					// Setting the parameter variables with values stored in slave queues
 					val slaveQueueStructs = slaveQueues.get(portEvent) // Might be empty
 					
-					val inParameters = event.parameterDeclarations
+					val inParameters = targetEvent.parameterDeclarations
 					val slaveQueueSize = slaveQueueStructs.size // Might be 0 if there is no in-event var
 					
 					if (inParameters.size <= slaveQueueSize) {
@@ -361,7 +381,7 @@ class ComponentTransformer {
 							val xStsSlaveSizeVariable = (slaveSizeVariable === null) ? null :
 									variableTrace.getAll(slaveSizeVariable).onlyElement
 							val xStsInParameterVariableLists = eventReferenceMapper
-									.getInputParameterVariablesByPorts(inParameter, port)
+									.getInputParameterVariablesByPorts(inParameter, targetPort)
 							// Separated in the lists according to ports
 							for (xStsInParameterVariables : xStsInParameterVariableLists) {
 								// Parameter optimization problem: parameters are not deleted independently
@@ -387,11 +407,20 @@ class ComponentTransformer {
 						checkState(slaveQueueSize == 0)
 					}
 					
-					// Execution if necessary
-					if (adapterComponentType.isControlSpecification(portEvent)) {
+					// queue reset > component reset > component run
+					val resetQueues = adapterComponentType.getResetQueues(portEvent)
+					if (!resetQueues.empty) {
+						val xStsQueueResetActions = resetQueues.resetMessageQueues(variableTrace)
+						thenAction.actions += xStsQueueResetActions
+					}
+					else if (adapterComponentType.isComponentResetSpecification(portEvent)) {
+						val originalInitAction = mergedSynchronousInitActions.get(adapterInstance)
+						thenAction.actions += originalInitAction.clone
+					}
+					else if (adapterComponentType.isRunSpecification(portEvent)) { // Execution if necessary
 						thenAction.actions += originalMergedAction.clone
 					}
-					// ...here other control actions could be implemented
+					// ...here other control actions could be mapped (implemented)
 					
 					// if (eventId == ..) { "transfer slave queue values" if (isControlSpec) { "run" }
 					branchExpressions += ifExpression
@@ -479,6 +508,7 @@ class ComponentTransformer {
 				}
 			}
 		}
+		val xStsDeletableSlaveQueues = newHashSet
 		for (queue : environmentalQueues) {
 			val adapter = queue.containingComponent
 			
@@ -596,9 +626,17 @@ class ComponentTransformer {
 							val xStsRandomVariable = xStsRandomVariableAction.variableDeclaration
 							xStsSlaveQueueSetting.actions += xStsRandomVariableAction
 							if (slaveQueueStruct.internal) {
-								// Assigning default values to internal parameter queues
-								// This is needed, otherwise parameter values can shift to wrong indexes
+								// Assigning default values to internal parameter queues. This is needed if 
+								// the queue is not environmental, otherwise parameter values can shift to wrong indexes
 								xStsRandomVariable.expression = xStsRandomVariable.defaultExpression
+								if (queue.isEnvironmentalAndCheck(systemPorts)) {
+									// We delete this slave queue later as we do not want to override internal parameters
+									logger.log(Level.INFO, "Internal parameter slave queue for system port: " + xStsSlaveQueue.name)
+									xStsDeletableSlaveQueues += xStsSlaveQueue
+								}
+								else {
+									// Currently cannot be reached due to isEnvironmentalAndCheck
+								}
 							}
 							else {
 								// Assigning a random value
@@ -623,6 +661,12 @@ class ComponentTransformer {
 		//
 		
 		xSts.changeTransitions(mergedAction.wrap)
+		
+		// Deleting environmental slave queues for internal parameters;
+		// after the construction of the entire XSTS to handle in events and merged events, too
+		xStsDeletableSlaveQueues.changeAssignmentsAndReadingAssignmentsToEmptyActions(xSts)
+		xStsDeletableSlaveQueues.forEach[it.deleteDeclaration] // Variable groups
+		//
 		
 		return xSts
 	}
@@ -766,7 +810,7 @@ class ComponentTransformer {
 		
 		for (instance : component.scheduledInstances) { // To support multiple execution
 			val instanceType = instance.type
-			asynchronousCompositeAction.actions +=
+			val action =
 			if (instanceType instanceof AbstractAsynchronousCompositeComponent) {
 				instanceType.mergeAsynchronousCompositeActions(mergedAdapterActions)
 			}
@@ -774,9 +818,87 @@ class ComponentTransformer {
 				val adapterAction = mergedAdapterActions.checkAndGet(instance)
 				adapterAction.clone // Important due to multiple executions
 			}
+			asynchronousCompositeAction.actions += action
+			
+			// Encode asynchronous component instances
+			instance.encodeAsynchronousComponentInstances(action)
+			//
 		}
 		
 		return asynchronousCompositeAction
+	}
+	
+	//
+	
+	protected def void encodeAsynchronousComponentInstances(
+			AsynchronousComponentInstance instance, Action action) {
+		if (!instance.needsScheduling) {
+			return
+		}
+		
+		val XSTS xSts = traceability.XSts
+		
+		val instanceEndcodingVariable = xSts.getOrCreateInstanceEndcodingVariable
+		
+		val index = instance.schedulingIndex
+		
+		val encodingAssignment = instanceEndcodingVariable.createAssignmentAction(
+				index.toIntegerLiteral)
+		action.appendToAction(encodingAssignment)
+	}
+	
+	protected def getOrCreateInstanceEndcodingVariable(XSTS xSts) {
+		val name = instanceEndcodingVariableName
+		
+		var instanceEndcodingVariable = xSts.getVariable(name)
+		if (instanceEndcodingVariable === null) {
+			instanceEndcodingVariable = createIntegerTypeDefinition
+					.createVariableDeclaration(name)
+			
+			instanceEndcodingVariable.addUnremovableAnnotation
+			instanceEndcodingVariable.addResettableAnnotation
+			
+			xSts.variableDeclarations += instanceEndcodingVariable
+		}
+		
+		return instanceEndcodingVariable
+	}
+	
+	protected def resetMessageQueues(Collection<? extends MessageQueue> resetQueues, Trace variableTrace) {
+		val xStsQueueResetActions = createSequentialAction
+		
+		for (resetQueue : resetQueues) {
+			val resetQueueMapping = queueTraceability.get(resetQueue)
+			val resetMasterQueue = resetQueueMapping.masterQueue.arrayVariable
+			val resetMasterSizeVariable = resetQueueMapping.masterQueue.sizeVariable
+			val resetSlaveQueues = resetQueueMapping.slaveQueues
+			
+			// Actually, the following values are "low-level values", but we handle them as XSTS values
+			val xStsResetMasterQueue = variableTrace.getAll(resetMasterQueue).onlyElement
+			val xStsResetMasterSizeVariable = (resetMasterSizeVariable === null) ? null :
+					variableTrace.getAll(resetMasterSizeVariable).onlyElement
+			
+			xStsQueueResetActions.actions += xStsResetMasterQueue.createVariableResetAction
+			if (xStsResetMasterSizeVariable !== null) {
+				xStsQueueResetActions.actions += xStsResetMasterSizeVariable.createVariableResetAction
+			}
+			
+			for (resetSlaveQueueStruct : resetSlaveQueues.values.flatten.toSet) {
+				val resetSlaveQueue = resetSlaveQueueStruct.arrayVariable
+				val resetSlaveSizeVariable = resetSlaveQueueStruct.sizeVariable
+			
+				val xStsSlaveQueues = variableTrace.getAll(resetSlaveQueue)
+				val xStsSlaveSizeVariable = (resetSlaveSizeVariable === null) ? null :
+						variableTrace.getAll(resetSlaveSizeVariable).onlyElement
+				
+				xStsQueueResetActions.actions += xStsSlaveQueues.createVariableResetActions
+				if (xStsSlaveSizeVariable !== null) {
+					xStsQueueResetActions.actions += xStsSlaveSizeVariable.createVariableResetAction
+				}
+			}
+		}
+		
+		return xStsQueueResetActions
 	}
 	
 	//

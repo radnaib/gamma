@@ -53,14 +53,23 @@
     <eLiterals name="RUN_ONCE"/>
     <eLiterals name="RUN_TO_COMPLETION" value="1"/>
     <eLiterals name="RESET" value="2"/>
+    <eLiterals name="RESET_MESSAGE_QUEUE" value="3" literal="RESET_MESSAGE_QUEUE"/>
+    <eLiterals name="RESET_MESSAGE_QUEUES" value="4"/>
+    <eLiterals name="RESET_OTHER_MESSAGE_QUEUES" value="5" literal="RESET_OTHER_MESSAGE_QUEUES"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="MessageQueue" eSuperTypes="../../hu.bme.mit.gamma.expression.model/model/expression.ecore#//NamedElement #//PrioritizedElement">
     <eStructuralFeatures xsi:type="ecore:EReference" name="capacity" eType="ecore:EClass ../../hu.bme.mit.gamma.expression.model/model/expression.ecore#//Expression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="eventReferences" lowerBound="1"
-        upperBound="-1" eType="ecore:EClass interface.ecore#//EventReference" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="eventPassings" lowerBound="1"
+        upperBound="-1" eType="#//EventPassing" containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="eventDiscardStrategy" eType="#//DiscardStrategy"
         defaultValueLiteral="INCOMING"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="EventPassing">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="source" lowerBound="1"
+        eType="ecore:EClass interface.ecore#//EventReference" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="target" eType="ecore:EClass interface.ecore#//EventReference"
+        containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="SynchronousComponent" abstract="true"
       eSuperTypes="interface.ecore#//Component"/>

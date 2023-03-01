@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -15,6 +15,8 @@ import hu.bme.mit.gamma.expression.model.EnumerationLiteralDefinition
 import hu.bme.mit.gamma.expression.model.EnumerationLiteralExpression
 import hu.bme.mit.gamma.expression.model.EnumerationTypeDefinition
 import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
+import hu.bme.mit.gamma.expression.model.TypeDeclaration
+import hu.bme.mit.gamma.expression.model.UnremovableVariableDeclarationAnnotation
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.VariableGroupRetriever
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.XstsOptimizer
@@ -130,7 +132,7 @@ class SystemReducer {
 	
 	def void deleteUnusedAndWrittenOnlyVariablesExceptOutEvents(XSTS xSts,
 			Collection<? extends VariableDeclaration> keepableVariables) { // Unfolded Gamma variables
-		val keepableXStsVariables = xSts.outputVariables
+		val keepableXStsVariables = xSts.nonInternalOutputVariables
 		
 		xSts.deleteUnusedAndWrittenOnlyVariables(keepableVariables, keepableXStsVariables)
 	}
@@ -206,6 +208,8 @@ class SystemReducer {
 			// To check and remove 'a := a - 1' like deletable variables
 			xStsDeleteableVariables -= xSts.externallyReadVariables
 			xStsDeleteableVariables -= xStsKeepableVariables
+			xStsDeleteableVariables.removeIf[it.hasAnnotation(UnremovableVariableDeclarationAnnotation)]
+			
 			
 			xSts.deleteVariablesAndAssignments(xStsDeleteableVariables)
 		}
@@ -213,7 +217,7 @@ class SystemReducer {
 	
 	def void deleteTrivialCodomainVariablesExceptOutEvents(XSTS xSts,
 			Collection<? extends VariableDeclaration> keepableVariables) { // Unfolded Gamma variables
-		val keepableXStsVariables = xSts.outputVariables
+		val keepableXStsVariables = xSts.nonInternalOutputVariables
 		
 		xSts.deleteTrivialCodomainVariables(keepableVariables, keepableXStsVariables)
 	}
@@ -245,13 +249,14 @@ class SystemReducer {
 		val xStsDeletableVariables = newHashSet
 		xStsDeletableVariables += oneValueXStsVariables
 		xStsDeletableVariables -= xStsKeepableVariables
+		xStsDeletableVariables.removeIf[it.hasAnnotation(UnremovableVariableDeclarationAnnotation)]
 		
 		xSts.deleteVariablesAndAssignments(xStsDeletableVariables)
 	}
 	
 	def void deleteUnnecessaryInputVariablesExceptOutEvents(XSTS xSts,
 			Collection<? extends VariableDeclaration> keepableVariables) { // Unfolded Gamma variables
-		val keepableXStsVariables = xSts.outputVariables
+		val keepableXStsVariables = xSts.nonInternalOutputVariables
 		
 		xSts.deleteUnnecessaryInputVariables(keepableVariables, keepableXStsVariables)
 	}
@@ -300,7 +305,7 @@ class SystemReducer {
 		// Note that only writes are handled - reads are not, so the following can cause
 		// nullptr exceptions if the method call (parameters) is not correct
 		for (xStsDeletableVariable : xStsDeleteableVariables) {
-			xStsDeletableVariable.delete // Delete needed due to e.g., transientVariables list
+			xStsDeletableVariable.deleteDeclaration // Delete needed due to e.g., transientVariables list
 			logger.log(Level.INFO, "Deleting XSTS variable " + xStsDeletableVariable.name)
 		}
 	}
@@ -314,11 +319,12 @@ class SystemReducer {
 		val xStsLiteralReferences = xSts.getAllContentsOfType(EnumerationLiteralExpression)
 		val xStsReferencedLiterals = xStsLiteralReferences.map[it.reference].toSet
 		
-		val xStsKeepableLiterals = keepableLiterals.map[it.name] // customizeName? - remains the same
-									.map[val name = it
-										xSts.typeDeclarations.map[it.typeDefinition]
-											.filter(EnumerationTypeDefinition).map[it.literals].flatten
-											.filter[it.name === name]].flatten.toSet
+		val xStsKeepableLiterals = keepableLiterals // customizeName? - remains the same
+									.map[val name = it.name
+										val typeDeclarationName = it.getContainerOfType(TypeDeclaration).name
+										xStsLiterals
+											.filter[it.getContainerOfType(TypeDeclaration).name == typeDeclarationName &&
+													it.name === name]].flatten.toSet
 		
 		val xStsDeletableLiterals = newHashSet
 		xStsDeletableLiterals += xStsLiterals
@@ -326,18 +332,24 @@ class SystemReducer {
 		xStsDeletableLiterals -= xStsKeepableLiterals
 		
 		// Keeping the lowest literal for the "else" branch
-		if (!xStsDeletableLiterals.empty) {
-			xStsDeletableLiterals.remove(0)
+		val xStsElseBranchedEnums = newHashSet
+		for (xStsDeletableLiteral : xStsDeletableLiterals.toList) {
+			val xStsContainingEnum = xStsDeletableLiteral.getContainerOfType(EnumerationTypeDefinition)
+			if (!xStsElseBranchedEnums.contains(xStsContainingEnum)) {
+				xStsDeletableLiterals -= xStsDeletableLiteral // No else branch for this enum yet, the literal cannot be removed
+				xStsElseBranchedEnums += xStsContainingEnum
+			}
 		}
 		//
 		
 		for (xStsDeletableLiteral : xStsDeletableLiterals) {
-			val xStsEnumerationType = xStsDeletableLiteral.getContainerOfType(EnumerationTypeDefinition)
+//			val xStsEnumerationType = xStsDeletableLiteral.getContainerOfType(EnumerationTypeDefinition)
 			logger.log(Level.INFO, "Deleting XSTS enum literal " + xStsDeletableLiteral.name)
 			xStsDeletableLiteral.remove
-			if (xStsEnumerationType.literals.empty) {
-				xStsEnumerationType.delete
-			}
+			// Enum types cannot be deleted as there must remain an else literal for each of them
+//			if (xStsEnumerationType.literals.empty) {
+//				xStsEnumerationType.delete
+//			}
 		}
 	}
 	
@@ -381,6 +393,21 @@ class SystemReducer {
 		return xStsOutputVariables
 	}
 	
+	protected def getNonInternalOutputVariables(XSTS xSts) {
+		val xStsOutputVariables = xSts.outputVariables
+		val xStsReadVariables = xSts.readVariables
+		
+		val xStsDeletableInternalOutputVariables = newHashSet
+		// Internal output parameter variables that are not read (not read in channels)
+		xStsDeletableInternalOutputVariables += xStsOutputVariables.filter[it.internal]
+		xStsDeletableInternalOutputVariables -= xStsReadVariables
+		//
+		
+		xStsOutputVariables -= xStsDeletableInternalOutputVariables
+		
+		return xStsOutputVariables
+	}
+	
 	//
 	
 	def void deleteUnusedPortReferencesInQueues(AsynchronousComponentInstance adapterInstance) {
@@ -391,7 +418,7 @@ class SystemReducer {
 			val storedPorts = queue.storedPorts
 			for (storedPort : storedPorts) {
 				if (unusedPorts.contains(storedPort)) {
-					for (eventReference : queue.eventReferences.toSet) {
+					for (eventReference : queue.sourceEventReferences.toSet) {
 						if (storedPort === eventReference.eventSource) {
 							eventReference.remove
 							logger.log(Level.INFO, '''Removing unused «storedPort.name» reference from «queue.name»''')
@@ -401,7 +428,7 @@ class SystemReducer {
 			}
 			
 			// Always empty queues are removed
-			if (queue.eventReferences.empty) {
+			if (queue.eventPassings.empty) {
 				logger.log(Level.INFO, '''Removing always empty «queue.name»''')
 				queue.remove
 			}

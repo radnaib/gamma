@@ -63,6 +63,8 @@ class ThetaVerifier extends AbstractVerifier {
 			val jar = System.getenv(ENVIRONMENT_VARIABLE_FOR_THETA_JAR)
 			// java -jar %THETA_XSTS_CLI_PATH% --model trafficlight.xsts --property red_green.prop
 			val traceFile = new File(modelFile.traceFile)
+			modelFile.parent + File.separator + modelFile.extensionlessName.toHiddenFileName +
+			"-" + Thread.currentThread.name + ".cex";
 			traceFile.delete // So no invalid/old cex is parsed if this actual process does not generate one
 			traceFile.deleteOnExit // So the cex with this random name does not remain on disk
 			
@@ -96,7 +98,8 @@ class ThetaVerifier extends AbstractVerifier {
 				super.result = ThreeStateBoolean.FALSE
 			}
 			else {
-				// Some kind of error
+				// Some kind of error or interruption by another (winner) process
+				logger.log(Level.WARNING, line)
 				throw new IllegalArgumentException(line)
 			}
 			// Adapting result
