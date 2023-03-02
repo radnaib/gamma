@@ -247,7 +247,9 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 				val reference = createPortEventReference
 				reference.port = port
 				reference.event = event
-				internalEventQueue.eventReferences += reference
+				
+				val eventPassing = createEventPassing(reference)
+				internalEventQueue.eventPassings += eventPassing
 			}
 		}
 
@@ -269,7 +271,9 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 				val reference = createPortEventReference
 				reference.port = port
 				reference.event = event
-				externalEventQueue.eventReferences += reference
+				
+				val eventPassing = createEventPassing(reference)
+				externalEventQueue.eventPassings += eventPassing
 			}
 		}
 
