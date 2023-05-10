@@ -114,8 +114,10 @@ public class CommandHandler extends AbstractHandler {
 				}
 			}
 		}
-		catch (IOException e) {
-				e.printStackTrace();
+		catch (Exception exception) {
+			exception.printStackTrace();
+			logger.log(Level.SEVERE, exception.getMessage());
+			DialogUtil.showErrorWithStackTrace(exception.getMessage(), exception);
 		}
 		return null;
 	}
