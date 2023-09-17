@@ -32,6 +32,7 @@ import hu.bme.mit.gamma.expression.model.ElseExpression;
 import hu.bme.mit.gamma.expression.model.EqualityExpression;
 import hu.bme.mit.gamma.expression.model.Expression;
 import hu.bme.mit.gamma.expression.model.ExpressionModelFactory;
+import hu.bme.mit.gamma.expression.model.IntegerLiteralExpression;
 import hu.bme.mit.gamma.expression.model.IntegerRangeLiteralExpression;
 import hu.bme.mit.gamma.expression.model.NotExpression;
 import hu.bme.mit.gamma.expression.model.OrExpression;
@@ -81,6 +82,38 @@ public class XstsActionUtil extends ExpressionUtil {
 		return xSts;
 	}
 	
+	public void unrollLoopActions(XSTS xSts) {
+		List<LoopAction> loopActions = ecoreUtil.getSelfAndAllContentsOfType(xSts, LoopAction.class);
+		for (LoopAction loopAction : loopActions) {
+			SequentialAction block = xStsFactory.createSequentialAction();
+			
+			IntegerRangeLiteralExpression range = loopAction.getRange();
+			Expression leftExpression = ExpressionModelDerivedFeatures.getLeft(range, true);
+			Expression rightExpression = ExpressionModelDerivedFeatures.getRight(range, false);
+			
+			int left = evaluator.evaluateInteger(leftExpression);
+			int right = evaluator.evaluateInteger(rightExpression);
+			
+			ParameterDeclaration parameter = loopAction.getIterationParameterDeclaration();
+			Action action = loopAction.getAction();
+			
+			for (int i = left; i < right; i++) {
+				Action clonedAction = ecoreUtil.clone(action);
+				List<DirectReferenceExpression> references = ecoreUtil.getAllContentsOfType(
+						clonedAction, DirectReferenceExpression.class);
+				for (DirectReferenceExpression reference : references) {
+					if (reference.getDeclaration() == parameter) {
+						IntegerLiteralExpression integerLiteral = toIntegerLiteral(i);
+						ecoreUtil.replace(integerLiteral, reference);
+					}
+				}
+				block.getActions().add(clonedAction);
+			}
+			
+			ecoreUtil.replace(block, loopAction);
+		}
+	}
+	
 	public void removeVariableDeclarationAnnotations(XSTS xSts,
 			Class<? extends VariableDeclarationAnnotation> annotationClass) {
 		removeVariableDeclarationAnnotations(xSts.getVariableDeclarations(), annotationClass);
@@ -88,22 +121,28 @@ public class XstsActionUtil extends ExpressionUtil {
 	
 	public void fillNullTransitions(XSTS xSts) {
 		if (xSts.getVariableInitializingTransition() == null) {
-			xSts.setVariableInitializingTransition(createEmptyTransition());
+			xSts.setVariableInitializingTransition(
+					createEmptyTransition());
 		}
 		if (xSts.getConfigurationInitializingTransition() == null) {
-			xSts.setConfigurationInitializingTransition(createEmptyTransition());
+			xSts.setConfigurationInitializingTransition(
+					createEmptyTransition());
 		}
 		if (xSts.getEntryEventTransition() == null) {
-			xSts.setEntryEventTransition(createEmptyTransition());
+			xSts.setEntryEventTransition(
+					createEmptyTransition());
 		}
 		if (xSts.getTransitions().isEmpty()) {
-			changeTransitions(xSts, createEmptyTransition());
+			changeTransitions(xSts,
+					createEmptyTransition());
 		}
 		if (xSts.getInEventTransition() == null) {
-			xSts.setInEventTransition(createEmptyTransition());
+			xSts.setInEventTransition(
+					createEmptyTransition());
 		}
 		if (xSts.getOutEventTransition() == null) {
-			xSts.setOutEventTransition(createEmptyTransition());
+			xSts.setOutEventTransition(
+					createEmptyTransition());
 		}
 	}
 	
@@ -247,7 +286,7 @@ public class XstsActionUtil extends ExpressionUtil {
 				
 				AssignmentAction newAssignmentAction = createAssignmentAction(newLhs, newRhs);
 				arrayLiteralAssignments.addAll(
-						extractArrayLiteralAssignments(newAssignmentAction));
+						extractArrayLiteralAssignments(newAssignmentAction)); // Recursion for multiD arrays
 			}
 		}
 		else {

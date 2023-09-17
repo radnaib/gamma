@@ -28,6 +28,8 @@ import hu.bme.mit.gamma.expression.model.VariableDeclaration;
 import hu.bme.mit.gamma.genmodel.model.AnalysisLanguage;
 import hu.bme.mit.gamma.genmodel.model.Verification;
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.VariableGroupRetriever;
+import hu.bme.mit.gamma.lowlevel.xsts.transformation.actionprimer.StaticSingleAssignmentTransformer;
+import hu.bme.mit.gamma.lowlevel.xsts.transformation.actionprimer.StaticSingleAssignmentTransformer.SsaType;
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.XstsOptimizer;
 import hu.bme.mit.gamma.property.derivedfeatures.PropertyModelDerivedFeatures;
 import hu.bme.mit.gamma.property.model.CommentableStateFormula;
@@ -40,6 +42,7 @@ import hu.bme.mit.gamma.transformation.util.GammaFileNamer;
 import hu.bme.mit.gamma.transformation.util.PropertyUnfolder;
 import hu.bme.mit.gamma.uppaal.serializer.UppaalModelSerializer;
 import hu.bme.mit.gamma.xsts.model.XSTS;
+import hu.bme.mit.gamma.xsts.nuxmv.transformation.XstsToNuxmvTransformer;
 import hu.bme.mit.gamma.xsts.transformation.SystemReducer;
 import hu.bme.mit.gamma.xsts.transformation.serializer.ActionSerializer;
 import hu.bme.mit.gamma.xsts.uppaal.transformation.XstsToUppaalTransformer;
@@ -47,21 +50,32 @@ import uppaal.NTA;
 
 public class OptimizerAndVerificationHandler extends TaskHandler {
 	
+	//
+	
+	protected VerificationHandler verificationHandler = null;
+	
+	//
+	
 	protected final SystemReducer xStsReducer = SystemReducer.INSTANCE;
 	protected final ActionSerializer xStsSerializer = ActionSerializer.INSTANCE;
 	protected final hu.bme.mit.gamma.xsts.promela.transformation.serializer.ModelSerializer promelaSerializer =
 			hu.bme.mit.gamma.xsts.promela.transformation.serializer.ModelSerializer.INSTANCE;
+	protected final hu.bme.mit.gamma.xsts.nuxmv.transformation.serializer.ModelSerializer smvSerializer =
+			hu.bme.mit.gamma.xsts.nuxmv.transformation.serializer.ModelSerializer.INSTANCE;
 	protected final VariableGroupRetriever variableGroupRetriever = VariableGroupRetriever.INSTANCE;
-
+	
+	//
+	
 	public OptimizerAndVerificationHandler(IFile file) {
 		super(file);
 	}
 	
-	public void execute(Verification verification) throws IOException {
+	public void execute(Verification verification) throws IOException, InterruptedException {
 		List<AnalysisLanguage> analysisLanguages = verification.getAnalysisLanguages();
 		checkArgument(analysisLanguages.contains(AnalysisLanguage.THETA) ||
 				analysisLanguages.contains(AnalysisLanguage.XSTS_UPPAAL) ||
-				analysisLanguages.contains(AnalysisLanguage.PROMELA));
+				analysisLanguages.contains(AnalysisLanguage.PROMELA) ||
+				analysisLanguages.contains(AnalysisLanguage.NUXMV));
 		
 		String analysisFilePath = verification.getFileName().get(0);
 		File analysisFile = super.exporeRelativeFile(verification, analysisFilePath);
@@ -115,7 +129,7 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 //		verification.setOptimize(false); // Now one by one optimization is also supported
 		
 		// A single one to store the traces and support later optimization - false: no trace serialization
-		VerificationHandler verificationHandler = new VerificationHandler(file, false);
+		verificationHandler = new VerificationHandler(file, false);
 		//
 		for (CommentableStateFormula formula : formulas) {
 			checkableFormulas.clear();
@@ -178,6 +192,21 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 						analysisFile.toString(), GammaFileNamer.XSTS_XTEXT_EXTENSION);
 				fileUtil.saveString(xStsFile, xStsString);
 			}
+			if (analysisLanguages.contains(AnalysisLanguage.NUXMV)) {
+				// SSE
+				StaticSingleAssignmentTransformer sseTransformer =
+						new StaticSingleAssignmentTransformer(xSts, SsaType.OUT_TRANS);
+				sseTransformer.execute();
+				// SMV
+				XstsToNuxmvTransformer nuxmvTransformer = new XstsToNuxmvTransformer(xSts,
+					analysisFile.getParentFile().toString(), analysisFile.getName());
+				nuxmvTransformer.execute();
+				// XSTS
+				String xStsString = xStsSerializer.serializeXsts(xSts, true);
+				String xStsFile = fileUtil.changeExtension(
+						analysisFile.toString(), GammaFileNamer.XSTS_XTEXT_EXTENSION);
+				fileUtil.saveString(xStsFile, xStsString);
+			}
 			//
 			
 			verificationHandler.execute(verification);
@@ -192,6 +221,12 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 		// Reinstate original state
 		propertyPackages.clear();
 		propertyPackages.addAll(savedPropertyPackages);
+	}
+	
+	//
+	
+	public VerificationHandler getVerificationHandler() {
+		return verificationHandler;
 	}
 
 }

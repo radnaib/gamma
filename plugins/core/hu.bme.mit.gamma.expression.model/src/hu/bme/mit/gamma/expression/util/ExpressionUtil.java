@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -626,7 +626,9 @@ public class ExpressionUtil {
 	}
 	
 	protected Expression _getInitialValueOfType(TypeReference type) {
-		return getInitialValueOfType(type.getReference().getType());
+		TypeDeclaration reference = type.getReference();
+		return getInitialValueOfType(
+				reference.getType());
 	}
 
 	protected Expression _getInitialValueOfType(BooleanTypeDefinition type) {
@@ -677,7 +679,8 @@ public class ExpressionUtil {
 			FieldReferenceExpression fieldReference = factory.createFieldReferenceExpression();
 			fieldReference.setFieldDeclaration(field);
 			assignment.setReference(fieldReference);
-			assignment.setValue(getInitialValueOfType(field.getType()));
+			assignment.setValue(
+					getInitialValueOfType(field.getType()));
 			recordLiteralExpression.getFieldAssignments().add(assignment);
 		}
 		return recordLiteralExpression;
@@ -813,6 +816,10 @@ public class ExpressionUtil {
 	
 	public void addUnremovableAnnotation(VariableDeclaration variable) {
 		addAnnotation(variable, factory.createUnremovableVariableDeclarationAnnotation());
+	}
+	
+	public void addInjectedAnnotation(VariableDeclaration variable) {
+		addAnnotation(variable, factory.createInjectedVariableDeclarationAnnotation());
 	}
 	
 	public void addAnnotation(VariableDeclaration variable, VariableDeclarationAnnotation annotation) {
@@ -952,6 +959,23 @@ public class ExpressionUtil {
 	}
 	
 	public IfThenElseExpression weave(Collection<? extends IfThenElseExpression> expressions) {
+		// Maybe there is a single if-then-else expression
+		if (expressions.size() == 1) {
+			IfThenElseExpression ifThenElse = javaUtil.getOnlyElement(expressions);
+			// Making sure else is not null
+			if (ifThenElse.getElse() == null) {
+				Expression then = ifThenElse.getThen();
+				if (then == null) {
+					throw new IllegalArgumentException("Then is null");
+				}
+				Expression clonedThen = ecoreUtil.clone(then);
+				ifThenElse.setElse(clonedThen);
+			}
+			
+			return ifThenElse;
+		}
+		//
+		
 		IfThenElseExpression first = null;
 		IfThenElseExpression last = null;
 		for (IfThenElseExpression expression : expressions) {

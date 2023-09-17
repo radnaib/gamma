@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -133,6 +133,8 @@ class JavaUtil {
 		return entries
 	}
 	
+	//
+	
 	def String toFirstCharUpper(String string) {
 		return string.toFirstUpper
 	}
@@ -143,6 +145,50 @@ class JavaUtil {
 	
 	def splitLines(String string) {
 		return string.split(System.lineSeparator).reject[it.nullOrEmpty]
+	}
+	
+	def void trim(StringBuilder builder) {
+		val trimmedString = builder.toString.trim
+		builder.length = 0
+		builder.append(trimmedString)
+	}
+	
+	def String deparenthesize(String string) {
+		val stringBuilder = new StringBuilder
+		stringBuilder.append(string.trim)
+		
+		val char leftParenthesis = '('
+		val char rightParenthesis = ')'
+		
+		while (stringBuilder.charAt(0) == leftParenthesis &&
+				stringBuilder.charAt(stringBuilder.length - 1) == rightParenthesis) {
+			stringBuilder.deleteCharAt(0)
+			stringBuilder.deleteCharAt(stringBuilder.length - 1)
+			stringBuilder.trim
+		}
+		
+		return stringBuilder.toString.trim
+	}
+	
+	def String simplifyCharacterPairs(String string, char character) {
+		val deparenthesizedString = string.deparenthesize
+		if (deparenthesizedString.charAt(0) != character) {
+			return deparenthesizedString
+		}
+		
+		val charRemoved = deparenthesizedString.substring(1)
+		val deparenthesizedCharRemoved = charRemoved.deparenthesize
+		if (deparenthesizedCharRemoved.charAt(0) == character) {
+			val charDoubleRemoved = deparenthesizedCharRemoved.substring(1)
+			return charDoubleRemoved.simplifyCharacterPairs(character) // Recursion to remove next char pair
+		}
+		
+		// No success, we return the original one
+		return deparenthesizedString
+	}
+	
+	def String simplifyExclamationMarkPairs(String string) {
+		return string.simplifyCharacterPairs('!')
 	}
 	
 }

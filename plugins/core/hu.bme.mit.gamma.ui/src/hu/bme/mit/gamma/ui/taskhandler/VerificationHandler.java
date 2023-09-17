@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -38,6 +38,7 @@ import com.google.gson.GsonBuilder;
 
 import hu.bme.mit.gamma.genmodel.model.AnalysisLanguage;
 import hu.bme.mit.gamma.genmodel.model.Verification;
+import hu.bme.mit.gamma.nuxmv.verification.NuxmvVerification;
 import hu.bme.mit.gamma.plantuml.serialization.SvgSerializer;
 import hu.bme.mit.gamma.plantuml.transformation.TraceToPlantUmlTransformer;
 import hu.bme.mit.gamma.promela.verification.PromelaVerification;
@@ -45,6 +46,7 @@ import hu.bme.mit.gamma.property.model.CommentableStateFormula;
 import hu.bme.mit.gamma.property.model.PropertyPackage;
 import hu.bme.mit.gamma.property.model.StateFormula;
 import hu.bme.mit.gamma.property.util.PropertyUtil;
+import hu.bme.mit.gamma.querygenerator.serializer.NuxmvPropertySerializer;
 import hu.bme.mit.gamma.querygenerator.serializer.PromelaPropertySerializer;
 import hu.bme.mit.gamma.querygenerator.serializer.PropertySerializer;
 import hu.bme.mit.gamma.querygenerator.serializer.ThetaPropertySerializer;
@@ -107,7 +109,7 @@ public class VerificationHandler extends TaskHandler {
 	
 	//
 	
-	public void execute(Verification verification) throws IOException {
+	public void execute(Verification verification) throws IOException, InterruptedException {
 		// Setting target folder
 		setTargetFolder(verification);
 		//
@@ -140,17 +142,21 @@ public class VerificationHandler extends TaskHandler {
 					verificationTask = PromelaVerification.INSTANCE;
 					propertySerializer = PromelaPropertySerializer.INSTANCE;
 					break;
+				case NUXMV:
+					verificationTask = NuxmvVerification.INSTANCE;
+					propertySerializer = NuxmvPropertySerializer.INSTANCE;
+					break;
 				default:
-					throw new IllegalArgumentException("Currently only UPPAAL and Theta are supported");
+					throw new IllegalArgumentException("Currently only UPPAAL, Theta, Spin and nuXmv are supported");
 			}
 		}
-		
-		String[] arguments = verificationArguments.isEmpty() ?
-				verificationTask.getDefaultArguments() :
-					verificationArguments.toArray(new String[verificationArguments.size()]);
-		
 		String filePath = verification.getFileName().get(0);
 		File modelFile = new File(filePath);
+		
+		String[] arguments = verificationArguments.isEmpty() ?
+				verificationTask.getDefaultArguments(modelFile) :
+					verificationArguments.toArray(new String[verificationArguments.size()]);
+		
 		boolean isOptimize = verification.isOptimize();
 		
 		// Retrieved traces
@@ -225,6 +231,12 @@ public class VerificationHandler extends TaskHandler {
 			ThreeStateBoolean verificationResult = result.getResult();
 			
 			stopwatch.stop();
+			
+			// Adding comment to connect the trace with the property
+			if (trace != null) {
+				traceUtil.addComment(trace, serializedFormula);
+			}
+			
 			TimeUnit timeUnit = TimeUnit.MILLISECONDS;
 			long elapsed = stopwatch.elapsed(timeUnit);
 			String elapsedString = elapsed + " " + timeUnit;
@@ -303,13 +315,13 @@ public class VerificationHandler extends TaskHandler {
 	//
 	
 	protected Result execute(AbstractVerification verificationTask, File modelFile,
-			File queryFile, List<ExecutionTrace> retrievedTraces, boolean isOptimize) {
+			File queryFile, List<ExecutionTrace> retrievedTraces, boolean isOptimize) throws InterruptedException {
 		return this.execute(verificationTask, modelFile, queryFile,
 				new String[0], retrievedTraces, isOptimize);
 	}
 	
 	protected Result execute(AbstractVerification verificationTask, File modelFile, File queryFile,
-			String[] arguments, List<ExecutionTrace> retrievedTraces, boolean isOptimize) {
+			String[] arguments, List<ExecutionTrace> retrievedTraces, boolean isOptimize) throws InterruptedException {
 		// If arguments are empty, we execute a task with default arguments
 		Result result = (arguments.length == 0) ? verificationTask.execute(modelFile, queryFile) :
 			verificationTask.execute(modelFile, queryFile, arguments);

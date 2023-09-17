@@ -85,6 +85,7 @@
     <eLiterals name="THETA" value="1"/>
     <eLiterals name="XSTS_UPPAAL" value="2" literal="XSTS_UPPAAL"/>
     <eLiterals name="PROMELA" value="3" literal="PROMELA"/>
+    <eLiterals name="NUXMV" value="4" literal="NUXMV"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="YakinduCompilation" abstract="true"
       eSuperTypes="#//Task">
@@ -287,5 +288,22 @@
   <eClassifiers xsi:type="ecore:EEnum" name="TestAutomatonType">
     <eLiterals name="POSITIVE"/>
     <eLiterals name="NEGATIVE" value="1"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="SafetyAssessment" abstract="true" eSuperTypes="#//Task">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="analysisModelTransformation"
+        eType="#//AnalysisModelTransformation" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="faultExtensionInstructionsFile"
+        upperBound="-1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="faultModesFile" upperBound="-1"
+        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="propertyPackages" upperBound="-1"
+        eType="ecore:EClass ../../hu.bme.mit.gamma.property.model/model/property.ecore#//PropertyPackage"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="faultExtensionInstructions"
+        eType="ecore:EClass ../../hu.bme.mit.gamma.fei.model/model/fei.ecore#//FaultExtensionInstructions"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="FaultTreeGeneration" eSuperTypes="#//SafetyAssessment"/>
+  <eClassifiers xsi:type="ecore:EClass" name="FmeaTableGeneration" eSuperTypes="#//SafetyAssessment">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="cardinality" eType="ecore:EClass ../../hu.bme.mit.gamma.expression.model/model/expression.ecore#//Expression"
+        containment="true"/>
   </eClassifiers>
 </ecore:EPackage>

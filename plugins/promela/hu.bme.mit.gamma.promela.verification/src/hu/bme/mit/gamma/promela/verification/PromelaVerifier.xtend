@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2022 Contributors to the Gamma project
+ * Copyright (c) 2022-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -24,7 +24,7 @@ import java.util.logging.Level
 class PromelaVerifier extends AbstractVerifier {
 	
 	protected final extension FileUtil fileUtil = FileUtil.INSTANCE
-	protected final extension PromelaQueryAdapter promelaQueryAdapter = PromelaQueryAdapter.INSTANCE
+	protected extension LtlQueryAdapter queryAdapter = null // One needs to be created for every verification task
 
 	// save trace to file
 	protected val saveTrace = false
@@ -37,6 +37,8 @@ class PromelaVerifier extends AbstractVerifier {
 		var Result result = null
 		
 		for (singleQuery : query.split(System.lineSeparator).reject[it.nullOrEmpty]) {
+			//
+			queryAdapter = new LtlQueryAdapter
 			// Supporting multiple queries in separate files
 			val ltl = '''«System.lineSeparator»ltl ltl_«i» { «singleQuery.adaptQuery» }'''
 			val modelWithLtl = model + ltl
@@ -68,6 +70,7 @@ class PromelaVerifier extends AbstractVerifier {
 			tmpGenFolder.forceDeleteOnExit
 			rootGenFolder.forceDeleteOnExit
 		}
+		
 		return result
 	}
 	
@@ -100,23 +103,39 @@ class PromelaVerifier extends AbstractVerifier {
 			// save result of command
 			val outputFile = new File(execFolder, ".output.txt")
 			outputFile.deleteOnExit
-			var outputString = ""
+			
+			val outputString = new StringBuilder
+			var String firstLine = null // Result checking
+				
 			while (resultReader.hasNext) {
-				outputString += resultReader.nextLine + System.lineSeparator
+				outputString.append(resultReader.nextLine + System.lineSeparator)
+				
+				if (firstLine === null) {
+					firstLine = outputString.toString
+				}
 			}
-			fileUtil.saveString(outputFile, outputString)
+			fileUtil.saveString(outputFile, outputString.toString)
+			
+			if (firstLine.contains("violated") || firstLine.contains("acceptance cycle")) {
+				super.result = ThreeStateBoolean.FALSE
+			}
+			else if (firstLine.contains("out of memory")) {
+				super.result = ThreeStateBoolean.UNDEF
+			}
+			else {
+				super.result = ThreeStateBoolean.TRUE
+			}
+			
+			super.result = super.result.adaptResult
 			
 			if (!trailFile.exists) {
 				// No proof/counterexample
-				super.result = ThreeStateBoolean.TRUE
-				// Adapting result
-				super.result = super.result.adaptResult
 				return new Result(result, null)
 			}
 			
-			super.result = ThreeStateBoolean.FALSE
+//			super.result = ThreeStateBoolean.FALSE
 			// Adapting result
-			super.result = super.result.adaptResult
+//			super.result = super.result.adaptResult
 			
 			// spin -t -p -g -l -w PromelaFile.pml
 			val traceCommand = #["spin", "-t", "-p", "-g", /*"-l",*/ "-w", modelFile.name /* see exec wokr-dir */]
@@ -160,6 +179,7 @@ class PromelaVerifier extends AbstractVerifier {
 			return new Result(result, trace)
 		} finally {
 			resultReader?.close
+			cancel
 		}
 	}
 	
@@ -168,55 +188,14 @@ class PromelaVerifier extends AbstractVerifier {
 	}
 	
 	def getTrailFile(File modelFile) {
-		return modelFile.parent + File.separator + modelFile.name + 
-				".trail"
+		return modelFile.parent + File.separator + modelFile.name + ".trail"
 	}
 	
 	def getTraceFile(File modelFile) {
-		return modelFile.parent + File.separator + modelFile.name + 
-				".pmltrace"
+		return modelFile.parent + File.separator + modelFile.name + ".pmltrace"
 	}
 	
 	def getPanFile(File modelFile) {
 		return modelFile.parent + File.separator + "pan"
-	}
-}
-
-class PromelaQueryAdapter {
-	public static PromelaQueryAdapter INSTANCE = new PromelaQueryAdapter
-	private new() {}
-	// Singleton
-	final String A = "A"
-	final String E = "E"
-	
-	extension FileUtil fileUtil = FileUtil.INSTANCE
-	boolean invert;
-	
-	def adaptQuery(File queryFile) {
-		return queryFile.loadString.adaptQuery
-	}
-	
-	def adaptQuery(String query) {
-		if (query.startsWith(E)) {
-			invert = true
-			return "!(" + query.substring(E.length) + ")"
-		}
-		if (query.startsWith(A)) {
-			invert = false
-			return query.substring(A.length)
-		}
-		invert = false
-		return query
-	}
-	
-	def adaptResult(ThreeStateBoolean promelaResult) {
-		if (promelaResult === null) {
-			// If the process is cancelled, the result will be null
-			return ThreeStateBoolean.UNDEF
-		}
-		if (invert) {
-			return promelaResult.opposite
-		}
-		return promelaResult
 	}
 }

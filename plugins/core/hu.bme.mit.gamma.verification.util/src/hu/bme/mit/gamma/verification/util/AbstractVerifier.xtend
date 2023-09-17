@@ -14,6 +14,7 @@ import hu.bme.mit.gamma.trace.model.ExecutionTrace
 import hu.bme.mit.gamma.trace.util.TraceUtil
 import hu.bme.mit.gamma.transformation.util.GammaFileNamer
 import hu.bme.mit.gamma.util.FileUtil
+import hu.bme.mit.gamma.util.JavaUtil
 import hu.bme.mit.gamma.util.PathEscaper
 import hu.bme.mit.gamma.verification.result.ThreeStateBoolean
 import java.io.File
@@ -49,13 +50,15 @@ abstract class AbstractVerifier {
 	def abstract Result verifyQuery(Object traceability, String parameters, File modelFile,	File queryFile)
 	
 	def cancel() {
-		isCancelled = true
-		if (process !== null) {
-			process.destroyForcibly
-			try {
-				// Waiting for process to end
-				process.waitFor
-			} catch (InterruptedException e) {}
+		if (!isCancelled) {
+			isCancelled = true
+			if (process !== null) {
+				process.destroyForcibly
+				try {
+					// Waiting for process to end
+					process.waitFor
+				} catch (InterruptedException e) {}
+			}
 		}
 	}
 	
@@ -71,6 +74,98 @@ abstract class AbstractVerifier {
 		return fileNamer.getHiddenSerializedPropertyFileName(modelFile.name)
 	}
 	
+	//
+	
+	static class LtlQueryAdapter {
+		final String A = "A"
+		final String E = "E"
+		
+		final String F = "F"
+		final String G = "G"
+		
+		boolean invert;
+		
+		//
+		protected final extension FileUtil fileUtil = FileUtil.INSTANCE
+		protected final extension JavaUtil javaUtil = JavaUtil.INSTANCE
+		
+		//
+		
+		def adaptQuery(File queryFile) {
+			return queryFile.loadString.adaptQuery
+		}
+		
+		def adaptQuery(String query) {
+			val trimmedQuery = query.trim.deparenthesize
+			
+			if (trimmedQuery.startsWith(E)) {
+				invert = true
+				// For some reason, nuXmv cannot make !(F...) an invariant property, so we adapt even more
+				if (trimmedQuery.startsWith(E + F)) {
+					return "G(!(" + trimmedQuery.substring((E + F).length) + "))"
+				}
+				if (trimmedQuery.startsWith(E + " " + F)) {
+					return "G(!(" + trimmedQuery.substring((E + " " + F).length) + "))"
+				}
+				// Default
+				return "!(" + trimmedQuery.substring(E.length) + ")"
+			}
+			if (trimmedQuery.startsWith(A)) {
+				invert = false
+				return trimmedQuery.substring(A.length)
+			}
+			
+			invert = false
+			return trimmedQuery
+		}
+		
+		def adaptInvariantQuery(String query) {
+			val trimmedQuery = query.trim.deparenthesize
+			
+			if (!trimmedQuery.startsWith(A) && !trimmedQuery.startsWith(E)) {
+				// It is an invariant query
+				return "G(" + trimmedQuery + ")";
+			}
+			
+			return trimmedQuery
+		}
+		
+		def adaptLtlOrInvariantQuery(String query) {
+			// p & q -> G(p & q)
+			// E F (p & q) -> G(p & q)
+			return query.adaptInvariantQuery.adaptQuery
+		}
+		
+		def adaptLtlOrInvariantQueryToReachability(String query) {
+			// G(p & q) -> (p & q)
+			val gQuery = query.adaptLtlOrInvariantQuery
+			if (!gQuery.startsWith(G)) {
+				throw new IllegalArgumentException("Not expected query form: " + query)
+			}
+			return "!(" + gQuery.substring(G.length) + ")"
+		}
+		
+		def adaptResult(ThreeStateBoolean promelaResult) {
+			if (promelaResult === null) {
+				// If the process is cancelled, the result will be null
+				return ThreeStateBoolean.UNDEF
+			}
+			if (invert) {
+				return promelaResult.opposite
+			}
+			return promelaResult
+		}
+		
+		//
+		
+		def isQueryInverted() {
+			return invert
+		}
+		
+	}
+	
+	//
+	
 	@Data
 	static class Result {
 		ThreeStateBoolean result
@@ -85,6 +180,10 @@ abstract class AbstractVerifier {
 				trace
 			}
 			return new Result(ThreeStateBoolean.UNDEF, extendedTrace)
+		}
+		
+		def invert() {
+			return new Result(result.opposite, trace)
 		}
 		
 	}

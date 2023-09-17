@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -21,6 +21,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EStructuralFeature;
 import org.yakindu.base.types.Direction;
 import org.yakindu.base.types.Event;
 import org.yakindu.sct.model.sgraph.Scope;
@@ -40,6 +42,7 @@ import hu.bme.mit.gamma.expression.model.ReferenceExpression;
 import hu.bme.mit.gamma.expression.model.Type;
 import hu.bme.mit.gamma.expression.model.TypeReference;
 import hu.bme.mit.gamma.expression.util.ExpressionModelValidator;
+import hu.bme.mit.gamma.fei.model.FaultExtensionInstructions;
 import hu.bme.mit.gamma.genmodel.derivedfeatures.GenmodelDerivedFeatures;
 import hu.bme.mit.gamma.genmodel.model.AbstractComplementaryTestGeneration;
 import hu.bme.mit.gamma.genmodel.model.AdaptiveBehaviorConformanceChecking;
@@ -54,6 +57,7 @@ import hu.bme.mit.gamma.genmodel.model.ContractAutomatonType;
 import hu.bme.mit.gamma.genmodel.model.Coverage;
 import hu.bme.mit.gamma.genmodel.model.EventMapping;
 import hu.bme.mit.gamma.genmodel.model.EventPriorityTransformation;
+import hu.bme.mit.gamma.genmodel.model.FmeaTableGeneration;
 import hu.bme.mit.gamma.genmodel.model.GenModel;
 import hu.bme.mit.gamma.genmodel.model.GenmodelModelPackage;
 import hu.bme.mit.gamma.genmodel.model.InterfaceCompilation;
@@ -61,6 +65,7 @@ import hu.bme.mit.gamma.genmodel.model.InterfaceMapping;
 import hu.bme.mit.gamma.genmodel.model.ModelReference;
 import hu.bme.mit.gamma.genmodel.model.OrchestratingConstraint;
 import hu.bme.mit.gamma.genmodel.model.PhaseStatechartGeneration;
+import hu.bme.mit.gamma.genmodel.model.SafetyAssessment;
 import hu.bme.mit.gamma.genmodel.model.SchedulingConstraint;
 import hu.bme.mit.gamma.genmodel.model.StateCoverage;
 import hu.bme.mit.gamma.genmodel.model.StatechartCompilation;
@@ -107,16 +112,28 @@ public class GenmodelValidator extends ExpressionModelValidator {
 	
 	public Collection<ValidationResultMessage> checkTasks(Task task) {
 		Collection<ValidationResultMessage> validationResultMessages = new ArrayList<ValidationResultMessage>();
-		if (task.getFileName().size() > 1) {
+		
+		List<String> fileNames = task.getFileName();
+		if (fileNames.size() > 1) {
 			validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR, 
-					"At most one file name can be specified",
+				"At most one file name can be specified",
 					new ReferenceInfo(GenmodelModelPackage.Literals.TASK__FILE_NAME)));
 		}
+//		for (String fileName : fileNames) {
+//			File file = new File(fileName);
+//			if (file.getName() != fileName) {
+//				validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR, 
+//					"A file name cannot contain file separators",
+//						new ReferenceInfo(GenmodelModelPackage.Literals.TASK__FILE_NAME)));
+//			}
+//		}
+		
 		if (task.getTargetFolder().size() > 1) {
 			validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR, 
-					"At most one target folder can be specified",
+				"At most one target folder can be specified",
 					new ReferenceInfo(GenmodelModelPackage.Literals.TASK__TARGET_FOLDER)));
 		}
+		
 		return validationResultMessages;
 	}
 	
@@ -416,6 +433,9 @@ public class GenmodelValidator extends ExpressionModelValidator {
 		for (AnalysisModelTransformation analysisModelTransformationTask :
 				javaUtil.filterIntoList(genmodel.getTasks(), AnalysisModelTransformation.class)) {
 			packageImports.removeAll(getUsedPackages(analysisModelTransformationTask));
+		}
+		for (SafetyAssessment safetyAssessment : javaUtil.filterIntoList(genmodel.getTasks(), SafetyAssessment.class)) {
+			packageImports.removeAll(getUsedPackages(safetyAssessment.getAnalysisModelTransformation()));
 		}
 		for (StatechartCompilation statechartCompilationTask :
 				javaUtil.filterIntoList(genmodel.getTasks(), StatechartCompilation.class)) {
@@ -937,6 +957,154 @@ public class GenmodelValidator extends ExpressionModelValidator {
 					new ReferenceInfo(GenmodelModelPackage.Literals.STATECHART_CONTRACT_GENERATION__SCENARIO,
 							statechartGeneration)));
 		}
+		return validationResultMessages;
+	}
+	
+	//
+	
+	
+	public Collection<ValidationResultMessage> checkTasks(SafetyAssessment safetyAssessment) {
+		Collection<ValidationResultMessage> validationResultMessages = new ArrayList<ValidationResultMessage>();
+
+		AnalysisModelTransformation analysisModelTransformation = safetyAssessment.getAnalysisModelTransformation();
+		validationResultMessages.addAll(
+				checkTasks(analysisModelTransformation));
+		
+		List<AnalysisLanguage> languages = analysisModelTransformation.getLanguages();
+		if (languages.size() != 1 || languages.stream().anyMatch(it -> it != AnalysisLanguage.NUXMV)) {
+			validationResultMessages.add(
+				new ValidationResultMessage(ValidationResult.ERROR, "Only SMV/nuXmv is supported", 
+					new ReferenceInfo(GenmodelModelPackage.Literals.SAFETY_ASSESSMENT__ANALYSIS_MODEL_TRANSFORMATION)));
+		}
+		
+		List<String> faultExtensionInstructionsFile = safetyAssessment.getFaultExtensionInstructionsFile();
+		int feiSize = faultExtensionInstructionsFile.size();
+		List<String> faultModesFile = safetyAssessment.getFaultModesFile();
+		int fmSize = faultModesFile.size();
+		FaultExtensionInstructions gFei = safetyAssessment.getFaultExtensionInstructions();
+		int gFeiSize = gFei == null ? 0 : 1;
+		
+		if (!(feiSize * fmSize * gFeiSize == 0 && feiSize + fmSize + gFeiSize == 1)) {
+			validationResultMessages.add(
+					new ValidationResultMessage(ValidationResult.ERROR, "A single fei or fm file must be specified", 
+						new ReferenceInfo(safetyAssessment)));
+			return validationResultMessages;
+		}
+		
+		List<String> files = new ArrayList<String>();
+		files.addAll(faultExtensionInstructionsFile);
+		files.addAll(faultModesFile);
+		
+		File resourceFile = ecoreUtil.getFile(safetyAssessment.eResource());
+
+		validationResultMessages.addAll(
+				checkRelativeFilePaths(resourceFile, files,
+						List.of(GenmodelModelPackage.Literals.SAFETY_ASSESSMENT__FAULT_EXTENSION_INSTRUCTIONS_FILE,
+								GenmodelModelPackage.Literals.SAFETY_ASSESSMENT__FAULT_MODES_FILE))
+				);
+		
+		return validationResultMessages;
+	}
+	
+	
+	public Collection<ValidationResultMessage> checkSafetyAssessment(SafetyAssessment safetyAssessment) {
+		Collection<ValidationResultMessage> validationResultMessages = new ArrayList<ValidationResultMessage>();
+		
+		AnalysisModelTransformation analysisModelTransformation = safetyAssessment.getAnalysisModelTransformation();
+		List<String> fileName = safetyAssessment.getFileName();
+		boolean noFileGiven = fileName.isEmpty();
+		
+		if (analysisModelTransformation == null && noFileGiven) {
+			validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
+				"The safety assessment task must have either an analysis model transformation specification " +
+						"or a file name that refers to the extendable smv model",
+					new ReferenceInfo(safetyAssessment)));
+		}
+		else if (analysisModelTransformation == null && !noFileGiven) {
+			validationResultMessages.addAll(
+					checkRelativeFilePath(safetyAssessment, fileName.get(0),
+							GenmodelModelPackage.Literals.TASK__FILE_NAME));
+		}
+		
+		//
+		
+		List<String> feiFile = safetyAssessment.getFaultExtensionInstructionsFile();
+		FaultExtensionInstructions feiModel = safetyAssessment.getFaultExtensionInstructions();
+		int feiFileSize = feiFile.size();
+		int feiFilesSize = feiFileSize + (feiModel != null ? 1 : 0);
+		boolean notOneFeiFileGiven = feiFilesSize != 1;
+		
+		if (notOneFeiFileGiven) {
+			validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
+				"A single fei file must be specified", new ReferenceInfo(safetyAssessment)));
+		}
+		else if (feiFileSize > 0) {
+			validationResultMessages.addAll(
+					checkRelativeFilePath(safetyAssessment, feiFile.get(0),
+							GenmodelModelPackage.Literals.SAFETY_ASSESSMENT__FAULT_EXTENSION_INSTRUCTIONS_FILE));
+		}
+		
+		return validationResultMessages;
+	}
+	
+	public Collection<ValidationResultMessage> checkFmeaTableGeneration(
+			FmeaTableGeneration fmeaTableGeneration) {
+		Collection<ValidationResultMessage> validationResultMessages = new ArrayList<ValidationResultMessage>();
+		
+		Expression cardinality = fmeaTableGeneration.getCardinality();
+		if (cardinality == null) {
+			return validationResultMessages;
+		}
+		
+		try {
+			int value = expressionEvaluator.evaluateInteger(cardinality);
+			if (value < 1) {
+				validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
+					"The cardinality must be a positive integer value",
+						new ReferenceInfo(GenmodelModelPackage.Literals.FMEA_TABLE_GENERATION__CARDINALITY)));
+			}
+		} catch (IllegalArgumentException e) {
+			validationResultMessages.add(new ValidationResultMessage(ValidationResult.ERROR,
+				"The cardinality must be a positive integer value",
+					new ReferenceInfo(GenmodelModelPackage.Literals.FMEA_TABLE_GENERATION__CARDINALITY)));
+		}
+		
+		return validationResultMessages;
+	}
+	
+	//
+	
+	protected Collection<ValidationResultMessage> checkRelativeFilePath(EObject anchor,
+			String relativeFilePath, EStructuralFeature reference) {
+		File file = ecoreUtil.getFile(anchor.eResource());
+		return checkRelativeFilePath(file, relativeFilePath, reference);
+	}
+	
+	protected Collection<ValidationResultMessage> checkRelativeFilePath(File anchor,
+			String relativeFilePath, EStructuralFeature reference) {
+		return checkRelativeFilePaths(anchor, List.of(relativeFilePath), List.of(reference));
+	}
+	
+	protected Collection<ValidationResultMessage> checkRelativeFilePaths(EObject anchor,
+			List<String> relativeFilePaths, List<EStructuralFeature> references) {
+		File file = ecoreUtil.getFile(anchor.eResource());
+		return checkRelativeFilePaths(file, relativeFilePaths, references);
+	}
+	
+	protected Collection<ValidationResultMessage> checkRelativeFilePaths(File anchor,
+			List<String> relativeFilePaths, List<EStructuralFeature> references) {
+		Collection<ValidationResultMessage> validationResultMessages = new ArrayList<ValidationResultMessage>();
+		
+		for (var i = 0; i < relativeFilePaths.size(); i++) {
+			String relativeFilePath = relativeFilePaths.get(i);
+			if (!fileUtil.isValidRelativeFile(anchor, relativeFilePath)) {
+				EStructuralFeature reference = references.get(i);
+				validationResultMessages.add(
+					new ValidationResultMessage(ValidationResult.ERROR, 
+							"This is not a valid relative path: " + relativeFilePath, new ReferenceInfo(reference)));
+			}
+		}
+		
 		return validationResultMessages;
 	}
 

@@ -10,8 +10,10 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.lowlevel.xsts.transformation
 
+import hu.bme.mit.gamma.expression.model.Expression
 import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
+import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.RemovableVariableRemover
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.XstsOptimizer
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.patterns.Events
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.patterns.FirstChoiceStates
@@ -40,6 +42,7 @@ import hu.bme.mit.gamma.statechart.lowlevel.model.Package
 import hu.bme.mit.gamma.statechart.lowlevel.model.Persistency
 import hu.bme.mit.gamma.statechart.lowlevel.model.Region
 import hu.bme.mit.gamma.statechart.lowlevel.model.RunUponExternalEventAnnotation
+import hu.bme.mit.gamma.statechart.lowlevel.model.RunUponExternalEventOrInternalTimeoutAnnotation
 import hu.bme.mit.gamma.statechart.lowlevel.model.StatechartDefinition
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import hu.bme.mit.gamma.xsts.model.SequentialAction
@@ -84,9 +87,10 @@ class LowlevelToXstsTransformer {
 	protected final extension AbstractTransitionMerger transitionMerger
 	
 	protected final extension GammaEcoreUtil gammaEcoreUtil = GammaEcoreUtil.INSTANCE
-	protected final extension XstsActionUtil actionFactory = XstsActionUtil.INSTANCE
+	protected final extension XstsActionUtil xStsActionUtil = XstsActionUtil.INSTANCE
 	protected final extension UnorderedActionTransformer unorderedActionTransformer = UnorderedActionTransformer.INSTANCE
 	protected final extension XstsOptimizer optimizer = XstsOptimizer.INSTANCE
+	protected final extension RemovableVariableRemover variableRemover = RemovableVariableRemover.INSTANCE
 	protected final extension VariableGroupRetriever variableGroupRetriever = VariableGroupRetriever.INSTANCE
 	// Model factories
 	protected final extension XSTSModelFactory factory = XSTSModelFactory.eINSTANCE
@@ -200,8 +204,12 @@ class LowlevelToXstsTransformer {
 		
 		xSts.transformUnorderedActions // Transforming here, so optimizeXSts needn't be extended
 		
-		xSts.optimizeXSts
 		xSts.fillNullTransitions
+		xSts.optimizeXSts // Needed to simplify the actions
+		if (optimize) {
+			xSts.removeReadOnlyVariables // Affects parameter and input variables, too
+		}
+		
 		handleTransientAndResettableVariableAnnotations
 		handleRunUponExternalEventAnnotation
 		// The created EMF models are returned
@@ -416,8 +424,8 @@ class LowlevelToXstsTransformer {
 		checkArgument(xStsRegionVariable !== null)
 		val lowlevelRegion = trace.getLowlevelRegion(xStsRegionVariable)
 		checkState(lowlevelRegion !== null)
-		val regionVariableGroups = RegionVariableGroups.Matcher.on(targetEngine).
-			getAllValuesOfregionVariableGroup(xStsRegionVariable)
+		val regionVariableGroups = RegionVariableGroups.Matcher.on(targetEngine)
+				.getAllValuesOfregionVariableGroup(xStsRegionVariable)
 		checkState(regionVariableGroups.size <= 1)
 		if (regionVariableGroups.size == 1) {
 			return regionVariableGroups.head
@@ -427,8 +435,8 @@ class LowlevelToXstsTransformer {
 			for (lowlevelOrthogonalRegion : lowlevelRegion.orthogonalRegions) {
 				if (trace.isTraced(lowlevelOrthogonalRegion)) {
 					val siblingXStsRegionVariable = trace.getXStsVariable(lowlevelOrthogonalRegion)
-					val siblingVariableGroup = RegionVariableGroups.Matcher.on(targetEngine).
-						getAllValuesOfregionVariableGroup(siblingXStsRegionVariable)
+					val siblingVariableGroup = RegionVariableGroups.Matcher.on(targetEngine)
+							.getAllValuesOfregionVariableGroup(siblingXStsRegionVariable)
 					checkState(siblingVariableGroup.size <= 1)
 					if (!siblingVariableGroup.empty) {
 						// There is a variable group on this region level
@@ -531,7 +539,7 @@ class LowlevelToXstsTransformer {
 	}
 	
 	protected def initializeVariableInitializingAction() {
-		val xStsVariables = newLinkedList
+		val xStsVariables = newArrayList
 		// Cycle on the original declarations, as their order is important due to 'var a = b'-like assignments
 		for (lowlevelStatechart : _package.components.filter(StatechartDefinition)) {
 			for (lowlevelVariable : lowlevelStatechart.variableDeclarations) {
@@ -544,8 +552,9 @@ class LowlevelToXstsTransformer {
 		xStsVariables -= xSts.componentParameterGroup.variables
 		// The region variables must be set to __Inactive__
 		xStsVariables += xSts.regionGroups.map[it.variables].flatten
-		// Initial value to the events, their order is not interesting
-		xStsVariables += xSts.inEventVariableGroup.variables + xSts.outEventVariableGroup.variables
+		// Initial value to the events and parameters, their order is not interesting
+		xStsVariables += xSts.inEventVariableGroup.variables + xSts.outEventVariableGroup.variables +
+				xSts.inEventParameterVariableGroup.variables + xSts.outEventParameterVariableGroup.variables
 		// Note that optimization is NOT needed here, as these are already XSTS variables
 		for (xStsVariable : xStsVariables) {
 			// variableInitializingAction as it must be set before setting the configuration
@@ -710,18 +719,29 @@ class LowlevelToXstsTransformer {
 			// To reduce state space in the entry action too in the case of transient variables
 			xSts.entryEventTransition.action.appendToAction(assignment.clone) // Cloning is important
 		}
+		
 		xSts.changeTransitions(newMergedAction.wrap)
 	}
 	
 	protected def handleRunUponExternalEventAnnotation() {
 		val statechart = trace.statechart
 		val xStsInEventVariables = xSts.inEventVariableGroup.variables
-		if (statechart.hasAnnotation(RunUponExternalEventAnnotation) &&
-				!xStsInEventVariables.empty) {
+		val xStsTimeoutVariables = xSts.timeoutGroup.variables
+		val runUponExternalEventAnnotation =
+				statechart.hasAnnotation(RunUponExternalEventAnnotation) && !xStsInEventVariables.empty
+		val runUponExternalEventAnnotationOrInternalTimeout =
+				statechart.hasAnnotation(RunUponExternalEventOrInternalTimeoutAnnotation) && !xStsTimeoutVariables.empty
+		if (runUponExternalEventAnnotation || runUponExternalEventAnnotationOrInternalTimeout) {
 			val xStsMergedAction = xSts.mergedAction
 			
-			val condition = xStsInEventVariables.map[it.createReferenceExpression]
-				.wrapIntoOrExpression
+			val conditions = <Expression>newArrayList
+			conditions += xStsInEventVariables.map[it.createReferenceExpression]
+			
+			if (runUponExternalEventAnnotationOrInternalTimeout) {
+				conditions += trace.getTimeoutExpressions.map[it.clone]
+			}
+			
+			val condition = conditions.wrapIntoOrExpression
 			val ifAction = condition.createIfAction(xStsMergedAction)
 			
 			xSts.mergedTransition.action = ifAction

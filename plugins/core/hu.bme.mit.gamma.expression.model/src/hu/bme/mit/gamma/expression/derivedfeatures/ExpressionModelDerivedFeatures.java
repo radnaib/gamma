@@ -19,6 +19,8 @@ import java.util.stream.Collectors;
 
 import org.eclipse.emf.ecore.EObject;
 
+import hu.bme.mit.gamma.expression.model.AccessExpression;
+import hu.bme.mit.gamma.expression.model.ArrayAccessExpression;
 import hu.bme.mit.gamma.expression.model.ArrayTypeDefinition;
 import hu.bme.mit.gamma.expression.model.BinaryExpression;
 import hu.bme.mit.gamma.expression.model.BooleanLiteralExpression;
@@ -42,6 +44,7 @@ import hu.bme.mit.gamma.expression.model.ExpressionPackage;
 import hu.bme.mit.gamma.expression.model.FieldDeclaration;
 import hu.bme.mit.gamma.expression.model.FinalVariableDeclarationAnnotation;
 import hu.bme.mit.gamma.expression.model.FunctionDeclaration;
+import hu.bme.mit.gamma.expression.model.InjectedVariableDeclarationAnnotation;
 import hu.bme.mit.gamma.expression.model.IntegerLiteralExpression;
 import hu.bme.mit.gamma.expression.model.IntegerRangeLiteralExpression;
 import hu.bme.mit.gamma.expression.model.IntegerTypeDefinition;
@@ -202,9 +205,18 @@ public class ExpressionModelDerivedFeatures {
 		return hasAnnotation(variable, ScheduledClockVariableDeclarationAnnotation.class);
 	}
 	
+	public static boolean isRealClock(VariableDeclaration variable) {
+		return isClock(variable) && !isScheduledClock(variable);
+	}
+	
 	public static boolean isInternal(VariableDeclaration variable) {
 		// Derived from an internal parameter (not assignable by the environment, only internal components)
 		return hasAnnotation(variable, InternalVariableDeclarationAnnotation.class);
+	}
+	
+	public static boolean isInjected(VariableDeclaration variable) {
+		// Injected via internal model transformations
+		return hasAnnotation(variable, InjectedVariableDeclarationAnnotation.class);
 	}
 	
 	public static boolean hasAnnotation(VariableDeclaration variable,
@@ -352,6 +364,21 @@ public class ExpressionModelDerivedFeatures {
 			throw new IllegalArgumentException("No type declaration: " + literal);
 		}
 		return declaration;
+	}
+	
+	public static List<Expression> getIndexes(Expression expression) {
+		List<Expression> indexes = new ArrayList<Expression>();
+		
+		if (expression instanceof AccessExpression accessExpression) {
+			Expression operand = accessExpression.getOperand();
+			indexes.addAll(
+					getIndexes(operand)); // Recursion, including records
+		}
+		if (expression instanceof ArrayAccessExpression arrayAccessExpression) {
+			indexes.add(arrayAccessExpression.getIndex()); // Index adding
+		}
+		
+		return indexes;
 	}
 	
 	public static Type getArrayElementType(Declaration declaration) {

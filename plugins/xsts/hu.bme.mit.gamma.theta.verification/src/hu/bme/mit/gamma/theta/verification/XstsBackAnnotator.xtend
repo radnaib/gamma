@@ -114,7 +114,7 @@ class XstsBackAnnotator {
 	
 	def void parseOutEvent(String id, String value, Step step) {
 		val systemOutEvent = xStsQueryGenerator.getSourceOutEvent(id)
-		if (value == "true" || value == "1") { // For Theta and UPPAAL
+		if (value == "true" || value == "TRUE" || value == "1") { // For Theta and UPPAAL
 			val event = systemOutEvent.get(0) as Event
 			val port = systemOutEvent.get(1) as Port
 			val systemPort = port.boundTopComponentPort // Back-tracking to the system port
@@ -145,7 +145,7 @@ class XstsBackAnnotator {
 	
 	def void parseSynchronousInEvent(String id, String value, Step step) {
 		val systemInEvent = xStsQueryGenerator.getSynchronousSourceInEvent(id)
-		if (value == "true" || value == "1") { // For Theta and UPPAAL
+		if (value == "true" || value == "TRUE" || value == "1") { // For Theta and UPPAAL
 			val event = systemInEvent.get(0) as Event
 			val port = systemInEvent.get(1) as Port
 			val systemPort = port.boundTopComponentPort // Back-tracking to the system port
@@ -187,13 +187,17 @@ class XstsBackAnnotator {
 		if (stringEventId !== null) {
 			val eventId = Integer.parseInt(stringEventId)
 			if (eventId != 0) { // 0 is the "empty" cell
-				val portEvent = messageQueue.getEvent(eventId)
-				val port = portEvent.key
-				val event = portEvent.value
-				val systemPort = port.boundTopComponentPort // Back-tracking to the top port
-				// Sometimes message queue can contain internal events
-				if (component.contains(systemPort)) {
-					return systemPort -> event
+				try {
+					val portEvent = messageQueue.getEvent(eventId) // Works if it is a port-event id
+					val port = portEvent.key
+					val event = portEvent.value
+					val systemPort = port.boundTopComponentPort // Back-tracking to the top port
+					// Sometimes message queue can contain internal events
+					if (component.contains(systemPort)) {
+						return systemPort -> event
+					}
+				} catch (IndexOutOfBoundsException e) { // Not a port-event id
+					return null
 				}
 			}
 		}
@@ -273,6 +277,12 @@ class XstsBackAnnotator {
 				targetType = targetType.arrayElementType.typeDefinition
 			}
 		}
+	}
+	
+	///
+	
+	def isArray(String id, String value) {
+		return arrayParser.isArray(id, value)
 	}
 	
 	///
