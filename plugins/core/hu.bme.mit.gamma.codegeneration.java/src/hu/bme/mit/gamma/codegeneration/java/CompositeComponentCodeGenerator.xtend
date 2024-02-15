@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -14,6 +14,7 @@ import hu.bme.mit.gamma.codegeneration.java.util.Namings
 import hu.bme.mit.gamma.codegeneration.java.util.TimingDeterminer
 import hu.bme.mit.gamma.statechart.composite.AbstractAsynchronousCompositeComponent
 import hu.bme.mit.gamma.statechart.composite.CompositeComponent
+import hu.bme.mit.gamma.statechart.interface_.Component
 import hu.bme.mit.gamma.statechart.interface_.Port
 
 import static extension hu.bme.mit.gamma.codegeneration.java.util.Namings.*
@@ -59,6 +60,38 @@ class CompositeComponentCodeGenerator {
 		«IF component instanceof AbstractAsynchronousCompositeComponent»
 			import «PACKAGE_NAME».«Namings.CHANNEL_PACKAGE_POSTFIX».*;
 		«ENDIF»
+	'''
+	
+	def generateResetMethods(Component component) '''
+		public void resetVariables() {
+			«FOR instance : component.containedComponents»
+				«instance.name».resetVariables();
+			«ENDFOR»
+		}
+		
+		public void resetStateConfigurations() {
+			«FOR instance : component.containedComponents»
+				«instance.name».resetStateConfigurations();
+			«ENDFOR»
+		}
+		
+		public void raiseEntryEvents() {
+			«FOR instance : component.containedComponents»
+				«instance.name».raiseEntryEvents();
+			«ENDFOR»
+		}
+	'''
+	
+	def executeHandleBeforeReset(Component component) '''
+		«FOR instance : component.containedComponents»
+			«instance.name».handleBeforeReset();
+		«ENDFOR»
+	'''
+	
+	def executeHandleAfterReset(Component component) '''
+		«FOR instance : component.containedComponents»
+			«instance.name».handleAfterReset();
+		«ENDFOR»
 	'''
 	
 	/**
@@ -139,8 +172,8 @@ class CompositeComponentCodeGenerator {
 		«FOR instance : component.derivedComponents»
 			«instance.name» = new «instance.derivedType.generateComponentClassName»(«FOR argument : instance.arguments SEPARATOR ", "»«argument.serialize»«ENDFOR»);
 		«ENDFOR»
-		«FOR port : component.portBindings.map[it.compositeSystemPort]»
-			«port.name.toFirstLower» = new «port.name.toFirstUpper»();
+		«FOR port : component.allPorts»
+			«port.name.toFirstLower» = new «port.name.toFirstUpper»(); «IF !component.portBindings.exists[it.compositeSystemPort === port]»// Unbound«ENDIF»
 		«ENDFOR»
 	'''
 	

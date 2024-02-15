@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2020 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -35,9 +35,6 @@ class XstsUppaalBackAnnotator extends AbstractUppaalBackAnnotator {
 	
 	new(Package gammaPackage, Scanner traceScanner, boolean sortTrace) {
 		super(gammaPackage, traceScanner, sortTrace)
-		this.xStsUppaalQueryGenerator = new XstsUppaalQueryGenerator(component)
-		this.xStsBackAnnotator = new XstsBackAnnotator(xStsUppaalQueryGenerator,
-				UppaalArrayParser.INSTANCE)
 		val schedulingConstraintAnnotation = gammaPackage.annotations
 				.filter(SchedulingConstraintAnnotation).head
 		if (schedulingConstraintAnnotation !== null) {
@@ -46,6 +43,10 @@ class XstsUppaalBackAnnotator extends AbstractUppaalBackAnnotator {
 		else {
 			this.schedulingConstraint = null
 		}
+		synchronized (engineSynchronizationObject) {
+			this.xStsUppaalQueryGenerator = new XstsUppaalQueryGenerator(component)
+		}
+		this.xStsBackAnnotator = new XstsBackAnnotator(xStsUppaalQueryGenerator, UppaalArrayParser.INSTANCE)
 	}
 	
 	override execute() throws EmptyTraceException {
@@ -222,6 +223,7 @@ class XstsUppaalBackAnnotator extends AbstractUppaalBackAnnotator {
 		
 		trace.removeInternalEventRaiseActs
 		trace.removeTransientVariableReferences // They always have default values
+		trace.addUnraisedEventNegations
 		
 		return trace
 	}

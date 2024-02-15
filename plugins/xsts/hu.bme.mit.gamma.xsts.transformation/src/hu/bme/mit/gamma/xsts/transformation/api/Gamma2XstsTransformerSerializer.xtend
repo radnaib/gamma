@@ -13,7 +13,6 @@ package hu.bme.mit.gamma.xsts.transformation.api
 import hu.bme.mit.gamma.expression.model.Expression
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.TransitionMerging
 import hu.bme.mit.gamma.property.model.PropertyPackage
-import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures
 import hu.bme.mit.gamma.statechart.interface_.Component
 import hu.bme.mit.gamma.transformation.util.GammaFileNamer
 import hu.bme.mit.gamma.transformation.util.ModelSlicerModelAnnotatorPropertyGenerator
@@ -30,10 +29,12 @@ import hu.bme.mit.gamma.xsts.transformation.serializer.ActionSerializer
 import java.io.File
 import java.util.List
 
+import static extension hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures.*
+
 class Gamma2XstsTransformerSerializer {
 	
 	protected final Component component
-	protected final List<Expression> arguments
+	protected final List<? extends Expression> arguments
 	protected final String targetFolderUri
 	protected final String fileName
 	
@@ -42,6 +43,8 @@ class Gamma2XstsTransformerSerializer {
 	// Configuration
 	protected final boolean optimize
 	protected final boolean optimizeArray
+	protected final boolean optimizeMessageQueues
+	protected final boolean optimizeEnvironmentalMessageQueues
 	protected final TransitionMerging transitionMerging
 	// Slicing
 	protected final PropertyPackage slicingProperties
@@ -61,16 +64,16 @@ class Gamma2XstsTransformerSerializer {
 		this(component, #[], targetFolderUri, fileName)
 	}
 	
-	new(Component component, List<Expression> arguments,
+	new(Component component, List<? extends Expression> arguments,
 			String targetFolderUri, String fileName) {
 		this(component, arguments, targetFolderUri, fileName, null)
 	}
 	
-	new(Component component, List<Expression> arguments,
+	new(Component component, List<? extends Expression> arguments,
 			String targetFolderUri, String fileName,
 			Integer schedulingConstraint) {
 		this(component, arguments, targetFolderUri, fileName, schedulingConstraint, schedulingConstraint,
-			true, false, TransitionMerging.HIERARCHICAL,
+			true, false, false, true, TransitionMerging.HIERARCHICAL,
 			null, new AnnotatablePreprocessableElements(null, null, null, null, null,
 				InteractionCoverageCriterion.EVERY_INTERACTION, InteractionCoverageCriterion.EVERY_INTERACTION,
 				null, DataflowCoverageCriterion.ALL_USE,
@@ -78,10 +81,11 @@ class Gamma2XstsTransformerSerializer {
 			null, null)
 	}
 	
-	new(Component component, List<Expression> arguments,
+	new(Component component, List<? extends Expression> arguments,
 			String targetFolderUri, String fileName,
 			Integer minSchedulingConstraint, Integer maxSchedulingConstraint,
 			boolean optimize, boolean optimizeArray,
+			boolean optimizeMessageQueues, boolean optimizeEnvironmentalMessageQueues,
 			TransitionMerging transitionMerging,
 			PropertyPackage slicingProperties,
 			AnnotatablePreprocessableElements annotatableElements,
@@ -95,6 +99,8 @@ class Gamma2XstsTransformerSerializer {
 		//
 		this.optimize = optimize
 		this.optimizeArray = optimizeArray
+		this.optimizeMessageQueues = optimizeMessageQueues
+		this.optimizeEnvironmentalMessageQueues = optimizeEnvironmentalMessageQueues
 		this.transitionMerging = transitionMerging
 		//
 		this.slicingProperties = slicingProperties
@@ -106,11 +112,11 @@ class Gamma2XstsTransformerSerializer {
 	}
 	
 	def void execute() {
-		val gammaPackage = StatechartModelDerivedFeatures.getContainingPackage(component)
+		val gammaPackage = component.containingPackage
 		// Preprocessing
 		val newTopComponent = preprocessor.preprocess(gammaPackage,
 				arguments, targetFolderUri, fileName, optimize)
-		val newGammaPackage = StatechartModelDerivedFeatures.getContainingPackage(newTopComponent)
+		val newGammaPackage = newTopComponent.containingPackage
 		// Slicing and Property generation
 		val slicerAnnotatorAndPropertyGenerator = new ModelSlicerModelAnnotatorPropertyGenerator(
 				newTopComponent,
@@ -119,7 +125,9 @@ class Gamma2XstsTransformerSerializer {
 				targetFolderUri, fileName)
 		slicerAnnotatorAndPropertyGenerator.execute
 		val gammaToXSTSTransformer = new GammaToXstsTransformer(
-			minSchedulingConstraint, maxSchedulingConstraint, true, true, optimizeArray,
+			minSchedulingConstraint, maxSchedulingConstraint,
+			true, true, optimizeArray,
+			optimizeMessageQueues, optimizeEnvironmentalMessageQueues,
 			transitionMerging, initialState, initialStateSetting)
 		// Normal transformation
 		val xSts = gammaToXSTSTransformer.execute(newGammaPackage)

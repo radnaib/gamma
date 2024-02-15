@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -91,6 +91,10 @@ public class ExpressionModelDerivedFeatures {
 	
 	//
 	
+	public static Expression getLeft(IntegerRangeLiteralExpression expression) {
+		return getLeft(expression, true);
+	}
+	
 	public static Expression getLeft(IntegerRangeLiteralExpression expression, boolean isInclusive) {
 		Expression leftOperand = expression.getLeftOperand();
 		boolean isLeftInclusive = expression.isLeftInclusive();
@@ -103,6 +107,10 @@ public class ExpressionModelDerivedFeatures {
 		}
 		return expressionUtil.wrapIntoAdd(
 				ecoreUtil.clone(leftOperand), 1); // Literal is exclusive, but caller wants inclusive
+	}
+	
+	public static Expression getRight(IntegerRangeLiteralExpression expression) {
+		return getRight(expression, true);
 	}
 	
 	public static Expression getRight(IntegerRangeLiteralExpression expression, boolean isInclusive) {
@@ -334,6 +342,16 @@ public class ExpressionModelDerivedFeatures {
 		return expression instanceof ElseExpression || expression instanceof DefaultExpression;
 	}
 	
+	public static TypeDefinition getElementTypeDefinition(Declaration declaration) {
+		Type type = declaration.getType();
+		TypeDefinition typeDefinition = getTypeDefinition(type);
+		if (typeDefinition instanceof ArrayTypeDefinition arrayTypeDefinition) {
+			return getTypeDefinition(
+					arrayTypeDefinition.getElementType());
+		}
+		return typeDefinition;
+	}
+	
 	public static TypeDefinition getTypeDefinition(Declaration declaration) {
 		Type type = declaration.getType();
 		return getTypeDefinition(type);
@@ -474,6 +492,14 @@ public class ExpressionModelDerivedFeatures {
 	
 	public static Expression getDefaultExpression(Type type) {
 		return expressionUtil.getInitialValueOfType(type);
+	}
+	
+	public static Declaration getContainingDeclaration(Type type) {
+		return ecoreUtil.getContainerOfType(type, Declaration.class);
+	}
+	
+	public static VariableDeclaration getContainingVariable(Type type) {
+		return ecoreUtil.getContainerOfType(type, VariableDeclaration.class);
 	}
 	
 	public static int getIndex(ParameterDeclaration parameter) {

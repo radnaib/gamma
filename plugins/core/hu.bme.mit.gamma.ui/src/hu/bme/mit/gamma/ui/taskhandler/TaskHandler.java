@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2019-2020 Contributors to the Gamma project
+ * Copyright (c) 2019-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -14,6 +14,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.logging.Logger;
 
 import org.eclipse.core.resources.IFile;
@@ -22,7 +23,9 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.resource.Resource;
 
 import hu.bme.mit.gamma.dialog.DialogUtil;
+import hu.bme.mit.gamma.expression.model.ExpressionModelFactory;
 import hu.bme.mit.gamma.expression.util.ExpressionEvaluator;
+import hu.bme.mit.gamma.genmodel.model.AbstractCodeGeneration;
 import hu.bme.mit.gamma.genmodel.model.AdaptiveContractTestGeneration;
 import hu.bme.mit.gamma.genmodel.model.CodeGeneration;
 import hu.bme.mit.gamma.genmodel.model.GenmodelModelFactory;
@@ -32,6 +35,7 @@ import hu.bme.mit.gamma.genmodel.model.TraceGeneration;
 import hu.bme.mit.gamma.genmodel.model.Verification;
 import hu.bme.mit.gamma.property.language.ui.serializer.PropertyLanguageSerializer;
 import hu.bme.mit.gamma.property.model.PropertyPackage;
+import hu.bme.mit.gamma.property.util.PropertyUtil;
 import hu.bme.mit.gamma.statechart.interface_.Package;
 import hu.bme.mit.gamma.statechart.language.ui.serializer.StatechartLanguageSerializer;
 import hu.bme.mit.gamma.trace.language.ui.serializer.TraceLanguageSerializer;
@@ -48,6 +52,7 @@ public abstract class TaskHandler {
 	protected final GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE;
 	protected final JavaUtil javaUtil = JavaUtil.INSTANCE;
 	protected final FileUtil fileUtil = FileUtil.INSTANCE;
+	protected final PropertyUtil propertyUtil = PropertyUtil.INSTANCE;
 	protected final ExpressionEvaluator expressionEvaluator = ExpressionEvaluator.INSTANCE;
 	
 	protected final GammaFileNamer fileNamer = GammaFileNamer.INSTANCE;
@@ -56,20 +61,25 @@ public abstract class TaskHandler {
 	
 	protected final Logger logger = Logger.getLogger("GammaLogger");
 	
-	protected final String projectLocation;
+	protected String projectLocation;
 	protected String targetFolderUri;
-	
+
+	protected final ExpressionModelFactory expressionFactory = ExpressionModelFactory.eINSTANCE;
 	protected final GenmodelModelFactory factory = GenmodelModelFactory.eINSTANCE;
+	
+	//
 	
 	public TaskHandler(IFile file) {
 		this.file = file;
 		// E.g., C:/Users/...
 		this.projectLocation = file.getProject().getLocation().toString(); 
 	}
-
+	
 	public void setTargetFolder(Task task) {
-		checkArgument(task.getTargetFolder().size() <= 1);
-		if (task.getTargetFolder().isEmpty()) {
+		List<String> targetFolders = task.getTargetFolder();
+		checkArgument(targetFolders.size() <= 1);
+		
+		if (targetFolders.isEmpty()) {
 			String targetFolder = null;
 			if (task instanceof TraceGeneration) {
 				String path = file.getParent().getFullPath().toString();
@@ -102,11 +112,11 @@ public abstract class TaskHandler {
 					targetFolder = relativeFolder.substring(projectLocation.length() + 1); // Counting the separator
 				}
 			}
-			task.getTargetFolder().add(targetFolder);
+			targetFolders.add(targetFolder);
 		}
 		// Setting the attribute, the target folder is a RELATIVE path now from the project
 		targetFolderUri = URI.decode(
-				projectLocation + File.separator + task.getTargetFolder().get(0));
+				projectLocation + File.separator + targetFolders.get(0));
 	}
 	
 	protected String getNameWithoutExtension(String fileName) {
@@ -119,6 +129,39 @@ public abstract class TaskHandler {
 	
 	public String getTargetFolderUri() {
 		return targetFolderUri;
+	}
+	
+	public String getBinUri() {
+		return projectLocation + File.separator + "bin";
+	}
+	
+	public void setProjectLocation(AbstractCodeGeneration codeGeneration) {
+		List<String> projectNames = codeGeneration.getProjectName();
+		
+		if (projectNames.isEmpty()) {
+			return;
+		}
+		
+		checkArgument(projectNames.size() <= 1);
+		
+		String projectName = javaUtil.getOnlyElement(projectNames);
+		String root = ecoreUtil.getProjectFile(codeGeneration).getParent();
+		
+		String newProjectLocation = root + File.separator + projectName;
+		File newProjectFile = new File(newProjectLocation);
+		if (newProjectFile.exists()) { // First, we try with the root location of the project
+			setProjectLocation(newProjectLocation);
+		}
+		else { // Not in root location of the project; we try the workspace location
+			String workspaceRoot = ecoreUtil.getWorkspace().toString();
+			newProjectLocation = workspaceRoot + File.separator + projectName;
+			setProjectLocation(newProjectLocation);
+		}
+		// TODO experiment with the Workspace object - maybe it can find the contained projects
+	}
+	
+	public void setProjectLocation(String projectLocation) {
+		this.projectLocation = projectLocation;
 	}
 	
 	public File exporeRelativeFile(Task task, String relativePath) {
@@ -158,7 +201,7 @@ public abstract class TaskHandler {
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
-				DialogUtil.showErrorWithStackTrace("Model cannot be serialized.", e);
+				DialogUtil.showErrorWithStackTrace("Model cannot be serialized", e);
 			}
 			new File(parentFolder + File.separator + fileName).delete();
 			// Saving like an EMF model

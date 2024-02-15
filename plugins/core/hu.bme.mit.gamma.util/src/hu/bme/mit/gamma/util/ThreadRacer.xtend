@@ -11,30 +11,54 @@
 package hu.bme.mit.gamma.util
 
 import java.util.Collection
+import java.util.List
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.logging.Level
 import java.util.logging.Logger
 
 class ThreadRacer<T> {
+	//
+	final Collection<InterruptableCallable<T>> callables = newArrayList
+	final Collection<InterruptableCallable<T>> wrappedCallables = newArrayList
+	final Collection<Future<T>> futures = newArrayList
+	final ExecutorService executor
 	
-	final CountDownLatch latch = new CountDownLatch(1)
+	final long timeout
+	final TimeUnit unit
+	
 	volatile T object
 
-	int numberOfCallablesShouldBeRunning = 0
+	final int numberOfCallablesShouldBeRunning
 	final AtomicInteger numberOfAbortedCallables = new AtomicInteger
-	
+	final CountDownLatch latch = new CountDownLatch(1)
+	//
 	protected final Logger logger = Logger.getLogger("GammaLogger")
+	//
+	
+	new(InterruptableCallable<T> callable) {
+		this(List.of(callable), -1, null)
+	}
+	
+	new(Collection<? extends InterruptableCallable<T>> callables) {
+		this(callables, -1, null)
+	}
 
-	def T execute(Collection<? extends InterruptableCallable<T>> callables) {
+	new(Collection<? extends InterruptableCallable<T>> callables, long timeout, TimeUnit unit) {
 		val size = callables.size
-		numberOfCallablesShouldBeRunning = size
+		this.numberOfCallablesShouldBeRunning = size
 		
-		val wrappedCallables = newArrayList
-		val futures = newArrayList
+		this.callables += callables
+		this.executor = Executors.newFixedThreadPool(size)
 		
-		val executor = Executors.newFixedThreadPool(size)
+		this.timeout = timeout
+		this.unit = unit
+	}
+	
+	def T execute() {
 		try {
 			for (callable :  callables) {
 				val wrappedCallable = callable.wrap
@@ -43,29 +67,48 @@ class ThreadRacer<T> {
 			}
 			
 			// Racing
-			logger.log(Level.INFO, '''Waiting for the threads to return a result''')
-			latch.await
-			logger.log(Level.INFO, '''A result has been returned''')
-			// One of the threads won
+			logger.info('''Waiting for the threads to return a result with «IF timeout <= 0»no timeout«ELSE»a timeout of «timeout»«ENDIF»''')
+			if (timeout <= 0) {
+				latch.await
+				logger.info('''A result has been returned''') // One of the threads won
+			}
+			else {
+				latch.await(timeout, unit)
+				logger.info('''«timeout» «unit» timeout has been reached''')
+			}
+			//
 			
 			return object
 		} finally {
 			// In case of interruption - finally block
-			for (future : futures) {
-				future.cancel(true)
-			}
-			for (callable : wrappedCallables) {
-				callable.cancel
-			}
-			
-			executor.shutdownNow
+			shutdown
 		}
 	}
+	
+	def shutdown() {
+		// Canceling working threads
+		for (future : futures) {
+			future.cancel(true)
+		}
+		for (callable : wrappedCallables) {
+			callable.cancel
+		}
+		executor.shutdownNow
+		// Letting the waiting thread go - not working as cannot force working threads to stop
+		// latch.countDown
+	}
+	
+	def isTerminated() {
+		return executor.terminated
+	}
+	
+	//
 	
 	protected def synchronized fillObject(T object) {
 		if (this.object === null) {
 			this.object = object
 			latch.countDown
+			logger.info('''Result returned by «Thread.currentThread.name»''')
 		}
 	}
 	
@@ -85,9 +128,10 @@ class ThreadRacer<T> {
 			}
 			
 			override call() throws Exception {
+				val currentThread = Thread.currentThread
 				try {
 					val result = callable.call
-					if (Thread.currentThread.isInterrupted) {
+					if (currentThread.isInterrupted) {
 						// The thread has been interrupted, the result is not valid
 						return null
 					}
@@ -98,12 +142,13 @@ class ThreadRacer<T> {
 				} catch (Exception e) {
 					// Exception, increment counter
 					incrementNumberOfAbortedCallables
-					if (Thread.currentThread.isInterrupted) {
+					if (currentThread.isInterrupted) {
 						// The thread has been interrupted, the result is not valid
 						return null
 					}
 					e.printStackTrace
 					throw e // Valid exception
+					// TODO model checking OOM exception should be swallowed here
 				}
 			}
 			

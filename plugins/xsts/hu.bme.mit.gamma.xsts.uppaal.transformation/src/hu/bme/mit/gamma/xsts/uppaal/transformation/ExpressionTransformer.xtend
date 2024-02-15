@@ -24,6 +24,7 @@ import hu.bme.mit.gamma.expression.model.FalseExpression
 import hu.bme.mit.gamma.expression.model.GreaterEqualExpression
 import hu.bme.mit.gamma.expression.model.GreaterExpression
 import hu.bme.mit.gamma.expression.model.IfThenElseExpression
+import hu.bme.mit.gamma.expression.model.ImplyExpression
 import hu.bme.mit.gamma.expression.model.InequalityExpression
 import hu.bme.mit.gamma.expression.model.IntegerLiteralExpression
 import hu.bme.mit.gamma.expression.model.LessEqualExpression
@@ -32,6 +33,7 @@ import hu.bme.mit.gamma.expression.model.ModExpression
 import hu.bme.mit.gamma.expression.model.MultiplyExpression
 import hu.bme.mit.gamma.expression.model.NotExpression
 import hu.bme.mit.gamma.expression.model.OrExpression
+import hu.bme.mit.gamma.expression.model.ParameterDeclaration
 import hu.bme.mit.gamma.expression.model.ReferenceExpression
 import hu.bme.mit.gamma.expression.model.SubtractExpression
 import hu.bme.mit.gamma.expression.model.TrueExpression
@@ -116,6 +118,12 @@ class ExpressionTransformer {
 		if (xStsDeclaration instanceof ConstantDeclaration) {
 			return xStsDeclaration.expression.transform
 		}
+		else if (xStsDeclaration instanceof ParameterDeclaration) {
+			val uppaalVariable = traceability.get(xStsDeclaration)
+			return createIdentifierExpression => [
+				it.identifier = uppaalVariable.variable.head
+			]
+		}
 		val xStsVariable = xStsDeclaration as VariableDeclaration
 		if (xStsVariable instanceof VariableDeclaration) {
 			val uppaalVariable = traceability.get(xStsVariable)
@@ -162,6 +170,13 @@ class ExpressionTransformer {
 			uppaalOperands += xStsOperand.transform
 		}
 		return LogicalOperator.AND.createLogicalExpression(uppaalOperands)
+	}
+	
+	def dispatch Expression transform(ImplyExpression expression) {
+		val uppaalOperands = newArrayList
+		uppaalOperands += expression.leftOperand.clone.negate.transform
+		uppaalOperands += expression.rightOperand.transform
+		return LogicalOperator.OR.createLogicalExpression(uppaalOperands)
 	}
 	
 	def dispatch Expression transform(EqualityExpression expression) {

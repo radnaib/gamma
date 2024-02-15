@@ -18,7 +18,6 @@ import hu.bme.mit.gamma.expression.model.ExpressionModelFactory
 import hu.bme.mit.gamma.expression.model.TypeDeclaration
 import hu.bme.mit.gamma.expression.model.UnremovableVariableDeclarationAnnotation
 import hu.bme.mit.gamma.expression.model.VariableDeclaration
-import hu.bme.mit.gamma.lowlevel.xsts.transformation.VariableGroupRetriever
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.XstsOptimizer
 import hu.bme.mit.gamma.statechart.composite.AsynchronousAdapter
 import hu.bme.mit.gamma.statechart.composite.AsynchronousComponentInstance
@@ -28,6 +27,7 @@ import hu.bme.mit.gamma.util.JavaUtil
 import hu.bme.mit.gamma.xsts.model.AbstractAssignmentAction
 import hu.bme.mit.gamma.xsts.model.XSTS
 import hu.bme.mit.gamma.xsts.model.XSTSModelFactory
+import hu.bme.mit.gamma.xsts.transformation.util.VariableGroupRetriever
 import hu.bme.mit.gamma.xsts.util.XstsActionUtil
 import java.util.Collection
 import java.util.logging.Level
@@ -106,7 +106,8 @@ class SystemReducer {
 		// can be placed inside assignment actions, and the other way around,
 		// cast exceptions are thrown!
 		for (xStsDeletableAssignmentAction : xStsDeletableAssignmentActions) {
-			xStsDeletableAssignmentAction.remove // To speed up the process
+			createEmptyAction.replace(
+				xStsDeletableAssignmentAction) // To avoid nullptrs
 		}
 		// Deleting references to the input event variables in guards
 		// before variable removal as references must be present here

@@ -10,8 +10,8 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.nuxmv.verification
 
+import hu.bme.mit.gamma.querygenerator.serializer.NuxmvPropertySerializer
 import hu.bme.mit.gamma.verification.util.AbstractVerification
-import hu.bme.mit.gamma.verification.util.AbstractVerifier.Result
 import java.io.File
 
 class NuxmvVerification extends AbstractVerification {
@@ -20,17 +20,12 @@ class NuxmvVerification extends AbstractVerification {
 	protected new() {}
 	//
 	
-	override Result execute(File modelFile, File queryFile, String[] arguments) {
-		val fileName = modelFile.name
-		val packageFileName = fileName.unfoldedPackageFileName
-		val gammaPackage = ecoreUtil.normalLoad(modelFile.parent, packageFileName)
-		val verifier = new NuxmvVerifier
-		
-		val argument = arguments.head
-		
-		argument.sanitizeArgument
-		
-		return verifier.verifyQuery(gammaPackage, argument, modelFile, queryFile)
+	override protected getTraceabilityFileName(String fileName) {
+		return fileName.unfoldedPackageFileName
+	}
+	
+	protected override createVerifier() {
+		return new NuxmvVerifier
 	}
 	
 	override getDefaultArguments(File modelFile) {
@@ -52,6 +47,10 @@ class NuxmvVerification extends AbstractVerification {
 	
 	override protected getArgumentPattern() {
 		return ".*" // TODO
+	}
+	
+	override protected createPropertySerializer() {
+		return NuxmvPropertySerializer.INSTANCE
 	}
 	
 }

@@ -10,34 +10,30 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.promela.verification
 
+import hu.bme.mit.gamma.querygenerator.serializer.PromelaPropertySerializer
 import hu.bme.mit.gamma.verification.util.AbstractVerification
-import hu.bme.mit.gamma.verification.util.AbstractVerifier.Result
-import java.io.File
 
 class PromelaVerification extends AbstractVerification {
 	// Singleton
 	public static final PromelaVerification INSTANCE = new PromelaVerification
 	protected new() {}
+	//
 	
-	override Result execute(File modelFile, File queryFile, String[] arguments) {
-		val fileName = modelFile.name
-		val packageFileName = fileName.unfoldedPackageFileName
-		val gammaPackage = ecoreUtil.normalLoad(modelFile.parent, packageFileName)
-		val verifier = new PromelaVerifier
-		val argument = arguments.head
-		
-		argument.sanitizeArgument
-		
-		return verifier.verifyQuery(gammaPackage, argument, modelFile, queryFile)
+	override protected getTraceabilityFileName(String fileName) {
+		return fileName.unfoldedPackageFileName
+	}
+	
+	protected override createVerifier() {
+		return new PromelaVerifier
 	}
 	
 	override getDefaultArguments() {
 		val MAX_DEPTH = 350000
 		return #[
 //			"-search -a -b" // default: -a search for acceptance cycles, -b bounded search mode, makes it an error to exceed the search depth, triggering and error trail
-			'''-search -I -m«MAX_DEPTH» -w32 -DVECTORSZ=6144'''
+			'''-search -n -I -m«MAX_DEPTH» -w32 -DVECTORSZ=6144''',
 //			'''-search -i -m«MAX_DEPTH» -w32 -DVECTORSZ=4096'''
-//			 '''-search -bfs -DVECTORSZ=4096'''
+			 '''-search -n -bfs -DVECTORSZ=6144'''
 		]
 		// -A apply slicing algorithm
 		// -m Changes the semantics of send events. Ordinarily, a send action will be (blocked) if the target message buffer is full. With this option a message sent to a full buffer is lost.
@@ -51,4 +47,9 @@ class PromelaVerification extends AbstractVerification {
 	protected override String getArgumentPattern() {
 		return "(-([A-Za-z])*([0-9])*(=)?([0-9])*( )*)*"
 	}
+	
+	override protected createPropertySerializer() {
+		return PromelaPropertySerializer.INSTANCE
+	}
+	
 }

@@ -23,6 +23,7 @@ import hu.bme.mit.gamma.expression.model.BinaryExpression;
 import hu.bme.mit.gamma.expression.model.Expression;
 import hu.bme.mit.gamma.expression.model.NotExpression;
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration;
+import hu.bme.mit.gamma.expression.model.UnaryExpression;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceElementReferenceExpression;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceReferenceExpression;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceStateReferenceExpression;
@@ -33,6 +34,7 @@ import hu.bme.mit.gamma.statechart.interface_.Event;
 import hu.bme.mit.gamma.statechart.interface_.EventParameterReferenceExpression;
 import hu.bme.mit.gamma.statechart.statechart.RaiseEventAction;
 import hu.bme.mit.gamma.statechart.statechart.State;
+import hu.bme.mit.gamma.trace.model.Cycle;
 import hu.bme.mit.gamma.trace.model.ExecutionTrace;
 import hu.bme.mit.gamma.trace.model.ExecutionTraceAllowedWaitingAnnotation;
 import hu.bme.mit.gamma.trace.model.ExecutionTraceAnnotation;
@@ -136,6 +138,10 @@ public class TraceModelDerivedFeatures extends ExpressionModelDerivedFeatures {
 		if (expression instanceof ComponentInstanceElementReferenceExpression element) {
 			return element.getInstance();
 		}
+		else if (expression instanceof UnaryExpression unaryExpression) {
+			Expression operand = unaryExpression.getOperand();
+			return getInstanceReference(operand);
+		}
 		else if (expression instanceof BinaryExpression binaryExpression) {
 			ComponentInstanceElementReferenceExpression elementReference =
 					getOperandOfType(binaryExpression, ComponentInstanceElementReferenceExpression.class);
@@ -146,6 +152,19 @@ public class TraceModelDerivedFeatures extends ExpressionModelDerivedFeatures {
 
 	
 	// Views
+	
+	public static List<Step> getAllSteps(ExecutionTrace trace) {
+		List<Step> steps = new ArrayList<Step>(
+				trace.getSteps());
+		
+		Cycle cycle = trace.getCycle();
+		if (cycle != null) {
+			steps.addAll(
+					cycle.getSteps());
+		}
+		
+		return steps;
+	}
 	
 	public static Step getLastStep(ExecutionTrace trace) {
 		List<Step> steps = trace.getSteps();
@@ -165,7 +184,7 @@ public class TraceModelDerivedFeatures extends ExpressionModelDerivedFeatures {
 	}
 	
 	public static List<EventParameterReferenceExpression> getEventParameterReferences(Step step) {
-		return  ecoreUtil.getAllContentsOfType(step, EventParameterReferenceExpression.class);
+		return ecoreUtil.getAllContentsOfType(step, EventParameterReferenceExpression.class);
 	}
 
 	public static List<ComponentInstanceStateReferenceExpression> getInstanceStateConfigurations(Step step) {

@@ -27,7 +27,6 @@ import hu.bme.mit.gamma.expression.model.EnumerationLiteralExpression;
 import hu.bme.mit.gamma.expression.model.VariableDeclaration;
 import hu.bme.mit.gamma.genmodel.model.AnalysisLanguage;
 import hu.bme.mit.gamma.genmodel.model.Verification;
-import hu.bme.mit.gamma.lowlevel.xsts.transformation.VariableGroupRetriever;
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.actionprimer.StaticSingleAssignmentTransformer;
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.actionprimer.StaticSingleAssignmentTransformer.SsaType;
 import hu.bme.mit.gamma.lowlevel.xsts.transformation.optimizer.XstsOptimizer;
@@ -38,6 +37,7 @@ import hu.bme.mit.gamma.statechart.composite.ComponentInstanceVariableReferenceE
 import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeatures;
 import hu.bme.mit.gamma.statechart.interface_.Component;
 import hu.bme.mit.gamma.statechart.interface_.Package;
+import hu.bme.mit.gamma.trace.model.ExecutionTrace;
 import hu.bme.mit.gamma.transformation.util.GammaFileNamer;
 import hu.bme.mit.gamma.transformation.util.PropertyUnfolder;
 import hu.bme.mit.gamma.uppaal.serializer.UppaalModelSerializer;
@@ -45,12 +45,15 @@ import hu.bme.mit.gamma.xsts.model.XSTS;
 import hu.bme.mit.gamma.xsts.nuxmv.transformation.XstsToNuxmvTransformer;
 import hu.bme.mit.gamma.xsts.transformation.SystemReducer;
 import hu.bme.mit.gamma.xsts.transformation.serializer.ActionSerializer;
+import hu.bme.mit.gamma.xsts.transformation.util.VariableGroupRetriever;
 import hu.bme.mit.gamma.xsts.uppaal.transformation.XstsToUppaalTransformer;
 import uppaal.NTA;
 
 public class OptimizerAndVerificationHandler extends TaskHandler {
 	
 	//
+
+	protected boolean serializeTraces; // Denotes whether traces are serialized
 	
 	protected VerificationHandler verificationHandler = null;
 	
@@ -67,18 +70,46 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 	//
 	
 	public OptimizerAndVerificationHandler(IFile file) {
-		super(file);
+		this(file, true);
 	}
+	
+	public OptimizerAndVerificationHandler(IFile file, boolean serializeTraces) {
+		super(file);
+		this.serializeTraces = serializeTraces;
+	}
+	
+	//
 	
 	public void execute(Verification verification) throws IOException, InterruptedException {
 		List<AnalysisLanguage> analysisLanguages = verification.getAnalysisLanguages();
+		AnalysisLanguage analysisLanguage = analysisLanguages.get(0);
 		checkArgument(analysisLanguages.contains(AnalysisLanguage.THETA) ||
 				analysisLanguages.contains(AnalysisLanguage.XSTS_UPPAAL) ||
 				analysisLanguages.contains(AnalysisLanguage.PROMELA) ||
-				analysisLanguages.contains(AnalysisLanguage.NUXMV));
+				analysisLanguages.contains(AnalysisLanguage.NUXMV),
+				analysisLanguage + " is not supported for slicing");
 		
-		String analysisFilePath = verification.getFileName().get(0);
-		File analysisFile = super.exporeRelativeFile(verification, analysisFilePath);
+		List<String> fileNames = verification.getFileName();
+		String analysisFilePath = fileNames.get(0);
+		File analysisFile = null;
+		
+		// Checking the file name
+		try {
+			analysisFile = super.exporeRelativeFile(verification, analysisFilePath);
+		} catch (NullPointerException e) {
+			if (!fileUtil.hasExtension(analysisFilePath) ) {
+				String fileExtension = fileNamer.getFileExtension(analysisLanguage);
+				analysisFilePath = fileUtil.changeExtension(analysisFilePath, fileExtension);
+				fileNames.set(0, analysisFilePath);
+			}
+			try {
+				analysisFile = super.exporeRelativeFile(verification, analysisFilePath);
+			} catch (NullPointerException ex) {
+				// Verification is not serialized?
+				analysisFile = new File(projectLocation + File.separator + analysisFilePath);
+			}
+		}
+		//
 		
 		String gStsFilePath = fileNamer.getEmfXStsUri(analysisFilePath);
 		File gStsFile = super.exporeRelativeFile(verification, gStsFilePath);
@@ -217,7 +248,9 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 			// Traces have not been serialized yet, doing it now
 			verificationHandler.optimizeTraces();
 		}
-		verificationHandler.serializeTraces(); // Serialization in one pass
+		if (serializeTraces) {
+			verificationHandler.serializeTraces(); // Serialization in one pass
+		}
 		// Reinstate original state
 		propertyPackages.clear();
 		propertyPackages.addAll(savedPropertyPackages);
@@ -227,6 +260,10 @@ public class OptimizerAndVerificationHandler extends TaskHandler {
 	
 	public VerificationHandler getVerificationHandler() {
 		return verificationHandler;
+	}
+	
+	public List<ExecutionTrace> getTraces() {
+		return verificationHandler.getTraces();
 	}
 
 }

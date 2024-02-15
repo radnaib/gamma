@@ -52,6 +52,7 @@ import hu.bme.mit.gamma.expression.model.FieldReferenceExpression;
 import hu.bme.mit.gamma.expression.model.GreaterEqualExpression;
 import hu.bme.mit.gamma.expression.model.GreaterExpression;
 import hu.bme.mit.gamma.expression.model.IfThenElseExpression;
+import hu.bme.mit.gamma.expression.model.ImplyExpression;
 import hu.bme.mit.gamma.expression.model.InequalityExpression;
 import hu.bme.mit.gamma.expression.model.InitializableElement;
 import hu.bme.mit.gamma.expression.model.IntegerLiteralExpression;
@@ -92,9 +93,6 @@ public class ExpressionUtil {
 	protected ExpressionUtil() {}
 	//
 	
-	protected final long EMPTY_MASTER_QUEUE_VALUE = 0;
-	
-	//
 	protected final GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE;
 	protected final JavaUtil javaUtil = JavaUtil.INSTANCE;
 	protected final ExpressionEvaluator evaluator = ExpressionEvaluator.INSTANCE;
@@ -785,47 +783,65 @@ public class ExpressionUtil {
 	// Variable annotation handling
 	
 	public void addTransientAnnotation(VariableDeclaration variable) {
-		addAnnotation(variable, factory.createTransientVariableDeclarationAnnotation());
+		addAnnotationIfNotPresent(variable, factory.createTransientVariableDeclarationAnnotation());
 	}
 	
 	public void addResettableAnnotation(VariableDeclaration variable) {
-		addAnnotation(variable, factory.createResettableVariableDeclarationAnnotation());
+		addAnnotationIfNotPresent(variable, factory.createResettableVariableDeclarationAnnotation());
 	}
 	
 	public void addEnvironmentResettableAnnotation(VariableDeclaration variable) {
-		addAnnotation(variable, factory.createEnvironmentResettableVariableDeclarationAnnotation());
+		addAnnotationIfNotPresent(variable, factory.createEnvironmentResettableVariableDeclarationAnnotation());
 	}
 	
 	public void addClockAnnotation(VariableDeclaration variable) {
-		addAnnotation(variable, factory.createClockVariableDeclarationAnnotation());
+		addAnnotationIfNotPresent(variable, factory.createClockVariableDeclarationAnnotation());
 	}
 	
 	public void addScheduledClockAnnotation(VariableDeclaration variable) {
-		addAnnotation(variable, factory.createScheduledClockVariableDeclarationAnnotation());
+		addAnnotationIfNotPresent(variable, factory.createScheduledClockVariableDeclarationAnnotation());
 	}
 	
 	public void addInternalAnnotation(VariableDeclaration variable) {
-		addAnnotation(variable, factory.createInternalVariableDeclarationAnnotation());
+		addAnnotationIfNotPresent(variable, factory.createInternalVariableDeclarationAnnotation());
 	}
 	
 	public void addDeclarationReferenceAnnotation(VariableDeclaration variable, Declaration declaration) {
+		addDeclarationReferenceAnnotations(variable, List.of(declaration));
+	}
+	
+	public void addDeclarationReferenceAnnotations(VariableDeclaration variable,
+			Collection<? extends Declaration> declarations) {
+		if (declarations.isEmpty()) {
+			return; // No use in adding an empty annotation
+		}
+		
 		DeclarationReferenceAnnotation declarationReferenceAnnotation = factory.createDeclarationReferenceAnnotation();
-		declarationReferenceAnnotation.setDeclaration(declaration);
+		
+		List<Declaration> referencedDeclarations = declarationReferenceAnnotation.getDeclarations();
+		referencedDeclarations.addAll(declarations);
+		
 		addAnnotation(variable, declarationReferenceAnnotation);
 	}
 	
 	public void addUnremovableAnnotation(VariableDeclaration variable) {
-		addAnnotation(variable, factory.createUnremovableVariableDeclarationAnnotation());
+		addAnnotationIfNotPresent(variable, factory.createUnremovableVariableDeclarationAnnotation());
 	}
 	
 	public void addInjectedAnnotation(VariableDeclaration variable) {
-		addAnnotation(variable, factory.createInjectedVariableDeclarationAnnotation());
+		addAnnotationIfNotPresent(variable, factory.createInjectedVariableDeclarationAnnotation());
 	}
 	
 	public void addAnnotation(VariableDeclaration variable, VariableDeclarationAnnotation annotation) {
 		if (variable != null) {
 			List<VariableDeclarationAnnotation> annotations = variable.getAnnotations();
 			annotations.add(annotation);
+		}
+	}
+	
+	public void addAnnotationIfNotPresent(VariableDeclaration variable, VariableDeclarationAnnotation annotation) {
+		if (variable != null && !hasAnnotation(variable, annotation.getClass())) {
+			addAnnotation(variable, annotation);
 		}
 	}
 	
@@ -872,6 +888,12 @@ public class ExpressionUtil {
 	
 	public IntegerLiteralExpression createLiteralOne() {
 		return toIntegerLiteral(1);
+	}
+	
+	public EnumerationLiteralDefinition createEnumerationLiteralDefinition(String name) {
+		EnumerationLiteralDefinition literal = factory.createEnumerationLiteralDefinition();
+		literal.setName(name);
+		return literal;
 	}
 	
 	public BigDecimal toBigDec(double value) {
@@ -941,6 +963,13 @@ public class ExpressionUtil {
 		parameterDeclaration.setType(type);
 		parameterDeclaration.setName(name);
 		return parameterDeclaration;
+	}
+	
+	public TypeDeclaration createTypeDeclaration(Type type, String name) {
+		TypeDeclaration typeDeclaration = factory.createTypeDeclaration();
+		typeDeclaration.setType(type);
+		typeDeclaration.setName(name);
+		return typeDeclaration;
 	}
 	
 	public NotExpression createNotExpression(Expression expression) {
@@ -1065,6 +1094,13 @@ public class ExpressionUtil {
 		greaterEqualExpression.setLeftOperand(lhs);
 		greaterEqualExpression.setRightOperand(rhs);
 		return greaterEqualExpression;
+	}
+	
+	public ImplyExpression createImplyExpression(Expression lhs, Expression rhs) {
+		ImplyExpression implyExpression = factory.createImplyExpression();
+		implyExpression.setLeftOperand(lhs);
+		implyExpression.setRightOperand(rhs);
+		return implyExpression;
 	}
 	
 	public IfThenElseExpression createMinExpression(Expression lhs, Expression rhs) {
@@ -1232,8 +1268,9 @@ public class ExpressionUtil {
 		int capacity = getArrayCapacity(queue);
 		if (capacity == 1) {
 			Expression peek = peek(queue);
-			return createEqualityExpression(peek,
-					toIntegerLiteral(EMPTY_MASTER_QUEUE_VALUE));
+			TypeDefinition elementType = ExpressionModelDerivedFeatures.getElementTypeDefinition(queue);
+			Expression emptyExpression = ExpressionModelDerivedFeatures.getDefaultExpression(elementType);
+			return createEqualityExpression(peek, emptyExpression);
 		}
 		else {
 			return isEmpty(sizeVariable);
@@ -1255,8 +1292,9 @@ public class ExpressionUtil {
 		int capacity = getArrayCapacity(queue);
 		if (capacity == 1) {
 			Expression peek = peek(queue);
-			return createInequalityExpression(peek,
-					toIntegerLiteral(EMPTY_MASTER_QUEUE_VALUE));
+			TypeDefinition elementType = ExpressionModelDerivedFeatures.getElementTypeDefinition(queue);
+			Expression emptyExpression = ExpressionModelDerivedFeatures.getDefaultExpression(elementType);
+			return createInequalityExpression(peek, emptyExpression);
 		}
 		else {
 			return isFull(sizeVariable, capacity);

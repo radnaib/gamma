@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2019-2022 Contributors to the Gamma project
+ * Copyright (c) 2019-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -12,7 +12,8 @@ package hu.bme.mit.gamma.ui.taskhandler;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-import java.util.logging.Level;
+import java.io.File;
+import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.emf.common.util.URI;
@@ -38,24 +39,48 @@ public class CodeGenerationHandler extends TaskHandler {
 	
 	public void execute(CodeGeneration codeGeneration, String packageName) {
 		// Setting target folder
+		setProjectLocation(codeGeneration); // Before the target folder
 		setTargetFolder(codeGeneration);
-		//
-		checkArgument(codeGeneration.getProgrammingLanguages().size() == 1, 
-				"A single programming language must be specified: " + codeGeneration.getProgrammingLanguages());
-		checkArgument(codeGeneration.getProgrammingLanguages().get(0) == ProgrammingLanguage.JAVA, 
-				"Currently only Java is supported.");
 		setCodeGeneration(codeGeneration, packageName);
-		Component component = codeGeneration.getComponent();
+		//
+		List<ProgrammingLanguage> programmingLanguages = codeGeneration.getProgrammingLanguages();
+		checkArgument(programmingLanguages.size() == 1,
+				"A single programming language must be specified: " + programmingLanguages);
+		ProgrammingLanguage programmingLanguage = programmingLanguages.get(0);
 		
-		if (component instanceof StatechartDefinition) {
-			StatechartDefinition statechart = (StatechartDefinition) component;
-			logger.log(Level.INFO, "Starting single statechart code generation: " + component.getName());
+		switch (programmingLanguage) {
+			case JAVA:
+				generateJavaCode(codeGeneration);
+				break;
+			case C:
+				generateCCode(codeGeneration);
+				break;
+			default:
+				throw new IllegalArgumentException("Not known programming language: " + programmingLanguage);
+		}
+	}
+	
+	//
+
+	protected void generateJavaCode(CodeGeneration codeGeneration) {
+		Resource codeGenerationResource = codeGeneration.eResource();
+		
+		Component component = codeGeneration.getComponent();
+		String componentName = component.getName();
+		if (component instanceof StatechartDefinition statechart) {
+			logger.info("Starting single statechart code generation: " + componentName);
 			CommandHandler singleStatechartCommandHandler = new CommandHandler();
-			singleStatechartCommandHandler.run(statechart, ecoreUtil.getFile(codeGeneration.eResource()).getParent(),
+			File resourceFile = (codeGenerationResource == null) ? null :
+					ecoreUtil.getFile(codeGenerationResource);
+			if (resourceFile == null) {
+				resourceFile = fileUtil.getFile(file);
+			}
+			String parent = resourceFile.getParent();
+			singleStatechartCommandHandler.run(statechart, parent,
 					targetFolderUri, codeGeneration.getPackageName().get(0));
 		}
 		else {
-			logger.log(Level.INFO, "Starting composite component code generation: " + component.getName());
+			logger.info("Starting composite component code generation: " + componentName);
 			ResourceSet codeGenerationResourceSet = new ResourceSetImpl();
 			codeGenerationResourceSet.getResource(component.eResource().getURI(), true);
 			loadStatechartTraces(codeGenerationResourceSet, component);
@@ -68,19 +93,27 @@ public class CodeGenerationHandler extends TaskHandler {
 		}
 	}
 	
+	protected void generateCCode(CodeGeneration codeGeneration) {
+		
+	}
+	
+	//
+	
 	private void setCodeGeneration(CodeGeneration codeGeneration, String packageName) {
-		checkArgument(codeGeneration.getPackageName().size() <= 1);
-		if (codeGeneration.getPackageName().isEmpty()) {
-			codeGeneration.getPackageName().add(packageName);
+		List<String> packageNames = codeGeneration.getPackageName();
+		checkArgument(packageNames.size() <= 1);
+		if (packageNames.isEmpty()) {
+			packageNames.add(packageName);
 		}
 		// TargetFolder set in setTargetFolder
 	}
 	
 	private void loadStatechartTraces(ResourceSet resourceSet, Component component) {
-		if (component instanceof CompositeComponent) {
-			CompositeComponent compositeComponent = (CompositeComponent) component;
-			for (ComponentInstance containedComponent : StatechartModelDerivedFeatures.getDerivedComponents(compositeComponent)) {
-				loadStatechartTraces(resourceSet, StatechartModelDerivedFeatures.getDerivedType(containedComponent));
+		if (component instanceof CompositeComponent compositeComponent) {
+			for (ComponentInstance containedComponent :
+					StatechartModelDerivedFeatures.getDerivedComponents(compositeComponent)) {
+				loadStatechartTraces(resourceSet,
+						StatechartModelDerivedFeatures.getDerivedType(containedComponent));
 			}
 		}
 		else {
@@ -94,7 +127,7 @@ public class CodeGenerationHandler extends TaskHandler {
 				try {
 					resourceSet.getResource(URI.createPlatformResourceURI(traceUri, true), true);
 				} catch (Exception e) {
-					logger.log(Level.INFO, statechartFileName + " trace is not found. " +
+					logger.info(statechartFileName + " trace is not found. " +
 						"Wrapper is not generated for Gamma statecharts without trace.");
 				}
 			}

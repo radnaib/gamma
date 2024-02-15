@@ -26,7 +26,7 @@ import java.util.List
 
 class Gamma2XstsPromelaTransformerSerializer {
 	protected final Component component
-	protected final List<Expression> arguments
+	protected final List<? extends Expression> arguments
 	protected final String targetFolderUri
 	protected final String fileName
 	
@@ -69,7 +69,7 @@ class Gamma2XstsPromelaTransformerSerializer {
 			null, null)
 	}
 	
-	new(Component component, List<Expression> arguments,
+	new(Component component, List<? extends Expression> arguments,
 			String targetFolderUri, String fileName,
 			Integer minSchedulingConstraint, Integer maxSchedulingConstraint,
 			boolean optimize,
@@ -99,7 +99,8 @@ class Gamma2XstsPromelaTransformerSerializer {
 		val xStsTransformer = new Gamma2XstsTransformerSerializer(component,
 			arguments, targetFolderUri,
 			fileName, minSchedulingConstraint, maxSchedulingConstraint,
-			optimize, true, // Optimize arrays?
+			optimize, true, /* Optimize arrays? */
+			false, /* Optimize message queues? */ true, /* Optimize environmental message queues? */
 			transitionMerging,
 			slicingProperties, annotatableElements,
 			initialState, initialStateSetting)

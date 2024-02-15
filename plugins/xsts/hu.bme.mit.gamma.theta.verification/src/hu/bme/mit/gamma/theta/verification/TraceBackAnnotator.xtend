@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -38,7 +38,7 @@ class TraceBackAnnotator {
 	protected final Scanner traceScanner
 	protected final ThetaQueryGenerator thetaQueryGenerator
 	protected final extension XstsBackAnnotator xStsBackAnnotator
-	protected static final Object engineSynchronizationObject = new Object
+	protected static final Object engineSynchronizationObject = new Object // For the VIATRA engine in the query generator
 	
 	protected final Package gammaPackage
 	protected final Component component
@@ -62,8 +62,6 @@ class TraceBackAnnotator {
 		this.traceScanner = traceScanner
 		this.sortTrace = sortTrace
 		this.component = gammaPackage.firstComponent
-		this.thetaQueryGenerator = new ThetaQueryGenerator(component)
-		this.xStsBackAnnotator = new XstsBackAnnotator(thetaQueryGenerator, ThetaArrayParser.INSTANCE)
 		val schedulingConstraintAnnotation = gammaPackage.annotations
 				.filter(SchedulingConstraintAnnotation).head
 		if (schedulingConstraintAnnotation !== null) {
@@ -71,6 +69,16 @@ class TraceBackAnnotator {
 		}
 		else {
 			this.schedulingConstraint = null
+		}
+		synchronized (engineSynchronizationObject) { // Due to the VIATRA engine
+			this.thetaQueryGenerator = new ThetaQueryGenerator(component)
+		}
+		this.xStsBackAnnotator = new XstsBackAnnotator(thetaQueryGenerator, ThetaArrayParser.INSTANCE)
+	}
+	
+	def ExecutionTrace synchronizeAndExecute() {
+		synchronized (engineSynchronizationObject) {
+			return execute
 		}
 	}
 	
@@ -219,12 +227,9 @@ class TraceBackAnnotator {
 		
 		trace.removeInternalEventRaiseActs
 		trace.removeTransientVariableReferences // They always have default values
+		trace.addUnraisedEventNegations
 		
 		return trace
-	}
-	
-	def static getEngineSynchronizationObject() {
-		return engineSynchronizationObject
 	}
 	
 	enum BackAnnotatorState {INIT, STATE_CHECK, ENVIRONMENT_CHECK}

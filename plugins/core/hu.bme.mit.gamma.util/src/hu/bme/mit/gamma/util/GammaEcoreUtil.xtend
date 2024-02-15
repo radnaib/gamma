@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2023 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -44,6 +44,20 @@ class GammaEcoreUtil {
 	
 	def void replace(EObject newObject, EObject oldObject) {
 		EcoreUtil.replace(oldObject, newObject)
+	}
+	
+	def isReferenced(EObject target, EObject container) {
+		val settings = UsageCrossReferencer.find(target, container)
+		return !settings.empty
+	}
+	
+	def inlineReferences(EObject target, EObject newObject, EObject container) {
+		val settings = UsageCrossReferencer.find(target, container).toSet
+		for (setting : settings) {
+			val referenceHolder = setting.EObject // The EObject from which the reference is made
+			val clonedNewObject = newObject.clone
+			clonedNewObject.replace(referenceHolder)
+		}
 	}
 	
 	def void replaceEachOther(EObject left, EObject right) {
@@ -140,6 +154,24 @@ class GammaEcoreUtil {
 				queue += container as T
 			}
 		}
+	}
+	
+	def <T extends EObject> void moveUpContainmentChainUntilType(EObject object, Class<? extends T> clazz) {
+		val container = object.eContainer
+		if (clazz.isInstance(container)) {
+			return
+		}
+		object.replace(container)
+		object.removeContainmentChainUntilType(clazz)
+	}
+	
+	def <T extends EObject> void removeContainmentChainUntilType(EObject object, Class<? extends T> clazz) {
+		val container = object.eContainer
+		if (clazz.isInstance(container)) {
+			object.remove
+			return
+		}
+		container.removeContainmentChainUntilType(clazz)
 	}
 	
 	def void changeAndReplace(EObject newObject, EObject oldObject, EObject container) {
@@ -535,6 +567,19 @@ class GammaEcoreUtil {
 	
 	//
 	
+	def boolean helperDisjoint(List<? extends EObject> lhs, List<? extends EObject> rhs) {
+		for (var i = 0; i < lhs.size; i++) {
+			for (var j = 0; j < rhs.size; j++) {
+				val lhsElement = lhs.get(i)
+				val rhsElement = rhs.get(j)
+				if (lhsElement.helperEquals(rhsElement)) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	
 	def boolean helperEquals(List<? extends EObject> lhs, List<? extends EObject> rhs) {
 		if (lhs === null && rhs === null) {
 			return true
@@ -605,9 +650,9 @@ class GammaEcoreUtil {
 		val uri = resource.URI
 		val location =
 		if (uri.isPlatform) {
-			ResourcesPlugin.getWorkspace().getRoot().getFile(
-				new Path(uri.toPlatformString(true))
-			).location.toString
+			ResourcesPlugin.workspace.root.getFile(
+				new Path(uri.toPlatformString(true)))
+			.location.toString
 		}
 		else {
 			val FILE_STRING = "file:"
@@ -619,11 +664,16 @@ class GammaEcoreUtil {
 			}
 			else {
 				// It is not platform URI, and still does not start with file: - how?
-				ResourcesPlugin.getWorkspace().getRoot().getFile(
+				ResourcesPlugin.workspace.root.getFile(
 					new Path(uriString)).location.toString
 			}
 		}
-		return new File(URI.decode(location))
+		return new File(
+			URI.decode(location))
+	}
+	
+	def getWorkspace() {
+		ResourcesPlugin.workspace.root.location
 	}
 	
 	def getFile(EObject object) {
@@ -688,6 +738,11 @@ class GammaEcoreUtil {
 		return file.projectFile
 	}
 	
+	def File getProjectFile(EObject object) {
+		val resource = object.eResource
+		return resource.projectFile
+	}
+	
 	def File getProjectFile(URI uri) {
 		val fileString = uri.toFileString
 		val file = new File (fileString)
@@ -749,6 +804,13 @@ class GammaEcoreUtil {
 		} catch (Exception e) {
 			return 0
 		}
+	}
+	
+	def isContainedByList(EObject object) {
+		val containingFeature = object.eContainingFeature
+		val container = object.eContainer
+		val get = container.eGet(containingFeature)
+		return get instanceof List
 	}
 	
 	def isFirst(EObject object) {
