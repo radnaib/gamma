@@ -208,11 +208,13 @@ class LowlevelToXstsTransformer {
 		xSts.fillNullTransitions
 		xSts.optimizeXSts // Needed to simplify the actions
 		if (optimize) {
-			xSts.removeReadOnlyVariables // Affects parameter and input variables, too
+			xSts.removeReadOnlyVariables(true) // Affects parameter and input variables, too
+			// Not internal variables at this point because they are handled later (internal events)
 		}
 		
 		handleStateInvariants
 		handleStatechartInvariants
+		handleEnvironmentalInvariants
 		
 		handleTransientAndResettableVariableAnnotations
 		handleRunUponExternalEventAnnotation
@@ -293,13 +295,15 @@ class LowlevelToXstsTransformer {
 						it.name = lowlevelEvent.name.eventName
 						it.type = createBooleanTypeDefinition // isRaised bool variable
 					]
-					xSts.variableDeclarations += xStsEventVariable // Target model modification
-					val eventVariableGroup = if (lowlevelEvent.direction == EventDirection.IN) {
-						xSts.inEventVariableGroup
-					} else {
-						xSts.outEventVariableGroup
+					if (lowlevelEvent.isRaised.internal) {
+						xStsEventVariable.addInternalAnnotation
 					}
+					xSts.variableDeclarations += xStsEventVariable // Target model modification
+					
+					val eventVariableGroup = (lowlevelEvent.direction == EventDirection.IN) ?
+							xSts.inEventVariableGroup : xSts.outEventVariableGroup
 					eventVariableGroup.variables += xStsEventVariable // Variable group modification
+					
 					trace.put(lowlevelEvent, xStsEventVariable) // Tracing event
 					trace.put(lowlevelEvent.isRaised, xStsEventVariable) // Tracing the contained isRaisedVariable
 					// Parameters 
@@ -309,22 +313,20 @@ class LowlevelToXstsTransformer {
 							it.name = lowlevelEventParameter.name.variableName
 							it.type = lowlevelEventParameter.type.transformType
 						]
-						xStsEventParameterVariables += xStsEventParameterVariable
-						val eventParameterVariableGroup = if (lowlevelEvent.direction == EventDirection.IN) {
-							xSts.inEventParameterVariableGroup
-						} else {
-							xSts.outEventParameterVariableGroup
-						}
 						xSts.variableDeclarations += xStsEventParameterVariable // Target model modification
+						xStsEventParameterVariables += xStsEventParameterVariable
+						
+						val eventParameterVariableGroup = (lowlevelEvent.direction == EventDirection.IN) ?
+								xSts.inEventParameterVariableGroup : xSts.outEventParameterVariableGroup
+						eventParameterVariableGroup.variables += xStsEventParameterVariable
 						if (lowlevelEvent.persistency == Persistency.TRANSIENT) {
 							// Event is transient, its parameters are marked environment-resettable variables
 							xStsEventParameterVariable.addEnvironmentResettableAnnotation
 						}
-						if (lowlevelEventParameter.isInternal) {
+						if (lowlevelEventParameter.internal) {
 							// Variable (parameter) must not be set from the environment, only other components
 							xStsEventParameterVariable.addInternalAnnotation
 						}
-						eventParameterVariableGroup.variables += xStsEventParameterVariable
 						trace.put(lowlevelEventParameter, xStsEventParameterVariable) // Tracing
 					}
 					// In-XSTS-model tracing
@@ -735,7 +737,7 @@ class LowlevelToXstsTransformer {
 				
 				val xStsStateInvariant =  xStsInvariantLhs.createImplyExpression(xStsInvariantRhs)
 				val xStsAssumeStateInvariant = xStsStateInvariant.createAssumeAction
-				xStsAssumeStateInvariant.addInvariantAnnotation
+				xStsAssumeStateInvariant.addInternalInvariantAnnotation
 				
 				val xStsMergedAction = xSts.mergedAction
 				xStsMergedAction.appendToAction(xStsAssumeStateInvariant)
@@ -750,16 +752,32 @@ class LowlevelToXstsTransformer {
 		val lowlevelStatechartInvariants = lowlevelStatechart.invariants
 		
 		if (!lowlevelStatechartInvariants.empty) {
-				val xStsInvariants = lowlevelStatechart.invariants.map[it.transformExpression]
-				val xStsStatechartInvariant = xStsInvariants.wrapIntoAndExpression
+			val xStsInvariants = lowlevelStatechartInvariants.map[it.transformExpression]
+			val xStsStatechartInvariant = xStsInvariants.wrapIntoAndExpression
 
-				val xStsAssumeStatechartInvariant = xStsStatechartInvariant.createAssumeAction
-				xStsAssumeStatechartInvariant.addInvariantAnnotation
-				
-				val xStsMergedAction = xSts.mergedAction
-				xStsMergedAction.appendToAction(xStsAssumeStatechartInvariant)
-				val xStsCongifurationInitAction = xSts.configurationInitializingTransition.action
-				xStsCongifurationInitAction.appendToAction(xStsAssumeStatechartInvariant.clone)
+			val xStsAssumeStatechartInvariant = xStsStatechartInvariant.createAssumeAction
+			xStsAssumeStatechartInvariant.addInternalInvariantAnnotation
+			
+			val xStsMergedAction = xSts.mergedAction
+			xStsMergedAction.appendToAction(xStsAssumeStatechartInvariant)
+			val xStsCongifurationInitAction = xSts.configurationInitializingTransition.action
+			xStsCongifurationInitAction.appendToAction(xStsAssumeStatechartInvariant.clone)
+		}
+	}
+	
+	protected def handleEnvironmentalInvariants() {
+		val lowlevelStatechart = trace.statechart
+		val lowlevelEnvironmentalInvariants = lowlevelStatechart.environmentalInvariants
+		
+		if (!lowlevelEnvironmentalInvariants.empty) {
+			val xStsInvariants = lowlevelEnvironmentalInvariants.map[it.transformExpression]
+			val xStsEnvironmentalInvariant = xStsInvariants.wrapIntoAndExpression
+
+			val xStsAssumeEnvironmentalInvariant = xStsEnvironmentalInvariant.createAssumeAction
+			xStsAssumeEnvironmentalInvariant.addEnvironmentalInvariantAnnotation
+			
+			val xStsMergedAction = xSts.mergedAction
+			xStsAssumeEnvironmentalInvariant.prependToAction(xStsMergedAction)
 		}
 	}
 	

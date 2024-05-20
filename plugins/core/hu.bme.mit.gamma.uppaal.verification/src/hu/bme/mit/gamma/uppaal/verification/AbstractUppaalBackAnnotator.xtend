@@ -18,7 +18,6 @@ import hu.bme.mit.gamma.trace.util.TraceUtil
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import hu.bme.mit.gamma.verification.util.TraceBuilder
 import java.util.Scanner
-import java.util.logging.Level
 import java.util.logging.Logger
 
 import static com.google.common.base.Preconditions.checkState
@@ -65,12 +64,12 @@ abstract class AbstractUppaalBackAnnotator {
 			it.import = this.gammaPackage
 			it.name = this.component.name + "Trace"
 		]
+		trace.addTimeUnitAnnotation
 		val topComponentArguments = gammaPackage.topComponentArguments
 		// Note that the top component does not contain parameter declarations anymore due to the preprocessing
 		checkState(topComponentArguments.size == component.parameterDeclarations.size, 
 			"The numbers of top component arguments and top component parameters are not equal: " +
 				topComponentArguments.size + " - " + component.parameterDeclarations.size)
-		logger.log(Level.INFO, "The number of top component arguments is " + topComponentArguments.size)
 		trace.arguments += topComponentArguments.map[it.clone]
 		return trace
 	}

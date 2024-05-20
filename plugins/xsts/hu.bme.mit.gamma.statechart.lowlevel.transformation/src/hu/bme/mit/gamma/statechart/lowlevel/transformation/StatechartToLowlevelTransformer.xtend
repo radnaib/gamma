@@ -20,6 +20,7 @@ import hu.bme.mit.gamma.statechart.interface_.EventDirection
 import hu.bme.mit.gamma.statechart.interface_.Package
 import hu.bme.mit.gamma.statechart.interface_.Port
 import hu.bme.mit.gamma.statechart.interface_.RealizationMode
+import hu.bme.mit.gamma.statechart.interface_.TimeUnit
 import hu.bme.mit.gamma.statechart.lowlevel.model.Component
 import hu.bme.mit.gamma.statechart.lowlevel.model.EventDeclaration
 import hu.bme.mit.gamma.statechart.lowlevel.model.StateNode
@@ -67,18 +68,22 @@ class StatechartToLowlevelTransformer {
 	protected final extension ActionModelFactory actionFactory = ActionModelFactory.eINSTANCE
 	// Trace object for storing the mappings
 	protected final Trace trace
-
+	
 	new() {
-		this(true, 10)
+		this(null)
 	}
-
-	new(boolean functionInlining, int maxRecursionDepth) {
+	
+	new(TimeUnit baseTimeUnit) {
+		this(true, 10, baseTimeUnit)
+	}
+	
+	new(boolean functionInlining, int maxRecursionDepth, TimeUnit baseTimeUnit) {
 		this.trace = new Trace
 		this.typeTransformer = new TypeTransformer(this.trace)
-		this.expressionTransformer = new ExpressionTransformer(this.trace, functionInlining, maxRecursionDepth)
+		this.expressionTransformer = new ExpressionTransformer(this.trace, functionInlining, maxRecursionDepth, baseTimeUnit)
 		this.valueDeclarationTransformer = new ValueDeclarationTransformer(this.trace)
-		this.actionTransformer = new ActionTransformer(this.trace, functionInlining, maxRecursionDepth)
-		this.triggerTransformer = new TriggerTransformer(this.trace, functionInlining, maxRecursionDepth)
+		this.actionTransformer = new ActionTransformer(this.trace, functionInlining, maxRecursionDepth, baseTimeUnit)
+		this.triggerTransformer = new TriggerTransformer(this.trace, functionInlining, maxRecursionDepth, baseTimeUnit)
 		this.pseudoStateTransformer = new PseudoStateTransformer(this.trace)
 	}
 	
@@ -142,7 +147,7 @@ class StatechartToLowlevelTransformer {
 			return #[lowlevelEventOut]
 		}
 		else {
-			// In-out events
+			// In-out and internal events
 			// At low-level, INTERNAL events are transformed as INOUT events
 			checkState(gammaDirection == EventDirection.INOUT ||
 				gammaDirection == EventDirection.INTERNAL)
@@ -165,6 +170,9 @@ class StatechartToLowlevelTransformer {
 				it.name = "isRaised"
 				it.type = createBooleanTypeDefinition
 			]
+			if (direction == EventDirection.IN && gammaPort.internal) { // Internal event
+				it.isRaised.addInternalAnnotation
+			}
 		]
 		trace.put(gammaPort, gammaEvent, lowlevelEvent)
 		// Transforming the parameters
@@ -277,6 +285,16 @@ class StatechartToLowlevelTransformer {
 					lowlevelStatechart.internalEventDeclarations += lowlevelEventDeclarations
 				}
 			}
+			// Mapping port and interface invariants
+			// First the interface invariants muist be mapped to the ports realizing the interface
+			val mappedInvariants = port.mapInterfaceInvariantsToPort
+			if (!mappedInvariants.empty) {
+				lowlevelStatechart.environmentalInvariants += mappedInvariants.map[it.transformSimpleExpression]
+			}
+			val invariants = port.invariants
+			if (!invariants.empty) {
+				lowlevelStatechart.environmentalInvariants += invariants.map[it.transformSimpleExpression]
+			}
 		}
 		for (region : statechart.regions) {
 			lowlevelStatechart.regions += region.transform
@@ -290,7 +308,7 @@ class StatechartToLowlevelTransformer {
 		val statechartInvariants = statechart.invariants
 		if (!statechartInvariants.empty) {
 			lowlevelStatechart.invariants += statechartInvariants.map[it.transformSimpleExpression]
-		}
+		}	
 		return lowlevelStatechart
 	}
 

@@ -22,7 +22,11 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 
 import hu.bme.mit.gamma.codegeneration.java.GlueCodeGenerator;
+import hu.bme.mit.gamma.genmodel.model.AnalysisLanguage;
+import hu.bme.mit.gamma.genmodel.model.AnalysisModelTransformation;
 import hu.bme.mit.gamma.genmodel.model.CodeGeneration;
+import hu.bme.mit.gamma.genmodel.model.ComponentReference;
+import hu.bme.mit.gamma.genmodel.model.GenmodelModelFactory;
 import hu.bme.mit.gamma.genmodel.model.ProgrammingLanguage;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstance;
 import hu.bme.mit.gamma.statechart.composite.CompositeComponent;
@@ -30,6 +34,12 @@ import hu.bme.mit.gamma.statechart.derivedfeatures.StatechartModelDerivedFeature
 import hu.bme.mit.gamma.statechart.interface_.Component;
 import hu.bme.mit.gamma.statechart.lowlevel.transformation.commandhandler.CommandHandler;
 import hu.bme.mit.gamma.statechart.statechart.StatechartDefinition;
+import hu.bme.mit.gamma.xsts.codegeneration.c.CodeBuilder;
+import hu.bme.mit.gamma.xsts.codegeneration.c.HavocBuilder;
+import hu.bme.mit.gamma.xsts.codegeneration.c.IStatechartCode;
+import hu.bme.mit.gamma.xsts.codegeneration.c.WrapperBuilder;
+import hu.bme.mit.gamma.xsts.codegeneration.c.platforms.SupportedPlatforms;
+import hu.bme.mit.gamma.xsts.model.XSTS;
 
 public class CodeGenerationHandler extends TaskHandler {
 
@@ -43,10 +53,12 @@ public class CodeGenerationHandler extends TaskHandler {
 		setTargetFolder(codeGeneration);
 		setCodeGeneration(codeGeneration, packageName);
 		//
-		List<ProgrammingLanguage> programmingLanguages = codeGeneration.getProgrammingLanguages();
-		checkArgument(programmingLanguages.size() == 1,
-				"A single programming language must be specified: " + programmingLanguages);
-		ProgrammingLanguage programmingLanguage = programmingLanguages.get(0);
+		checkArgument(codeGeneration.getProgrammingLanguages().size() == 1, 
+				"A single programming language must be specified: " + codeGeneration.getProgrammingLanguages());
+		
+		ProgrammingLanguage programmingLanguage = codeGeneration.getProgrammingLanguages().get(0);
+		checkArgument(programmingLanguage == ProgrammingLanguage.JAVA || programmingLanguage == ProgrammingLanguage.C,
+				"Currently only Java and C supported.");
 		
 		switch (programmingLanguage) {
 			case JAVA:
@@ -60,8 +72,69 @@ public class CodeGenerationHandler extends TaskHandler {
 		}
 	}
 	
-	//
-
+	protected void generateCCode(CodeGeneration codeGeneration) {
+		final Component component = codeGeneration.getComponent();
+		/* Gamma to XSTS transformation */
+		AnalysisModelTransformation transformation = GenmodelModelFactory.eINSTANCE.createAnalysisModelTransformation();
+		transformation.getLanguages().add(AnalysisLanguage.THETA);
+		
+		ComponentReference reference = GenmodelModelFactory.eINSTANCE.createComponentReference();
+		reference.setComponent(component);
+		transformation.setModel(reference);
+		transformation.setOptimizeEnvironmentalMessageQueues(false);
+		
+		/* rename file to be hidden */
+		String fileName = file.getName();
+		transformation.getFileName().add("." + fileName);
+		
+		AnalysisModelTransformationHandler transformationHandler = new AnalysisModelTransformationHandler(file);
+		try {
+			transformationHandler.execute(transformation);
+		} catch (Exception e) {
+			logger.severe("Gamma to XSTS transformation failed: " + e.getMessage());
+		}
+		
+		/* retrieve XSTS model */
+		String locationUriString = file.getLocationURI().toString().replace(fileName, "." + fileName)
+					.replace(file.getFileExtension(), "gsts");
+		URI locationUri = URI.createURI(locationUriString);
+		
+		Resource resource = new ResourceSetImpl().getResource(locationUri, true);
+		XSTS xSts = (XSTS) resource.getContents().get(0);
+		
+		logger.info("XSTS model " + xSts.getName() + " successfully loaded.");
+		
+		/* determine the path of the project's root */
+		File projectFile = ecoreUtil.getProjectFile(locationUri);
+		URI root = URI.createFileURI(projectFile.toString());
+		
+		/* define the platform and function pointers */
+		final boolean pointers = true;
+		final SupportedPlatforms platform = SupportedPlatforms.UNIX;
+		
+		try {
+			/* define what to generate */
+			List<IStatechartCode> generate = List.of(
+				new CodeBuilder(component, xSts),
+				new WrapperBuilder(component, xSts, pointers),
+				new HavocBuilder(component, xSts)
+			);
+			
+			/* build c code */
+			for (IStatechartCode builder : generate) {
+				builder.setPlatform(platform);
+				builder.constructHeader();
+				builder.constructCode();
+				builder.save(root);
+			}
+			
+		} catch (Exception e) {
+			logger.severe("XSTS to C transformation failed: " + e.getMessage());
+		}
+		
+		logger.info("XSTS to C transformation completed.");
+	}
+	
 	protected void generateJavaCode(CodeGeneration codeGeneration) {
 		Resource codeGenerationResource = codeGeneration.eResource();
 		
@@ -92,12 +165,6 @@ public class CodeGenerationHandler extends TaskHandler {
 			generator.dispose();
 		}
 	}
-	
-	protected void generateCCode(CodeGeneration codeGeneration) {
-		
-	}
-	
-	//
 	
 	private void setCodeGeneration(CodeGeneration codeGeneration, String packageName) {
 		List<String> packageNames = codeGeneration.getPackageName();

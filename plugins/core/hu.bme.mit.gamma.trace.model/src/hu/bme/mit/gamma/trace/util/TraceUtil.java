@@ -74,9 +74,11 @@ public class TraceUtil extends StatechartUtil {
 		public int compare(Expression lhsAssert, Expression rhsAssert) {
 			Expression lhs = TraceModelDerivedFeatures.getPrimaryAssert(lhsAssert);
 			Expression rhs = TraceModelDerivedFeatures.getPrimaryAssert(rhsAssert);
-			if (lhs instanceof RaiseEventAct) {
-				if (rhs instanceof RaiseEventAct) {
-					return 0;
+			if (lhs instanceof RaiseEventAct lhsAct) {
+				if (rhs instanceof RaiseEventAct rhsAct) {
+					String lhsName = lhsAct.getPort().getName() + lhsAct.getEvent().getName();
+					String rhsName = rhsAct.getPort().getName() + rhsAct.getEvent().getName();
+					return lhsName.compareTo(rhsName);
 				}
 				return -1;
 			}
@@ -353,13 +355,13 @@ public class TraceUtil extends StatechartUtil {
 		ComponentInstanceStateReferenceExpression stateCovering = null;
 		
 		for (Expression asser : coveringAsserts) {
-			if (asser instanceof ComponentInstanceStateReferenceExpression) {
-				stateCovering = (ComponentInstanceStateReferenceExpression) asser;
+			if (asser instanceof ComponentInstanceStateReferenceExpression exp) {
+				stateCovering = exp;
 			}
 		}
 		for (Expression asser : coveredAsserts) {
-			if (asser instanceof ComponentInstanceStateReferenceExpression) {
-				stateCovered = (ComponentInstanceStateReferenceExpression) asser;
+			if (asser instanceof ComponentInstanceStateReferenceExpression exp) {
+				stateCovered = exp;
 			}
 		}
 		if (stateCovered == null || stateCovering == null) {

@@ -323,11 +323,8 @@ public class MutationBasedTestGenerationHandler extends TaskHandler {
 					}
 				}
 				
-				List<ComponentInstanceReferenceExpression> instanceReferences = ecoreUtil
-						.getAllContentsOfType(trace, ComponentInstanceReferenceExpression.class)
-						.stream()
-						.filter(it -> !(it.eContainer() instanceof ComponentInstanceReferenceExpression))
-						.toList();
+				List<ComponentInstanceReferenceExpression> instanceReferences =
+						TraceModelDerivedFeatures.getFirstComponentInstanceReferenceExpressions(trace);
 				for (ComponentInstanceReferenceExpression instanceReference : instanceReferences) {
 					ComponentInstance componentInstance = instanceReference.getComponentInstance();
 					String instanceName = componentInstance.getName();
@@ -348,7 +345,7 @@ public class MutationBasedTestGenerationHandler extends TaskHandler {
 				
 				// Traces and tests are not serialized
 				traceSerializer.serialize(traceFolderUri, traceFileName, null, testFolderUri,
-						testFileName, packageName, programmingLanguage, trace);
+						testFileName, packageName, trace, file, programmingLanguage);
 				
 				// Extend trace metrics - used when another mutation is conducted
 				extendTraceMetrics(stateFrequency, trace);

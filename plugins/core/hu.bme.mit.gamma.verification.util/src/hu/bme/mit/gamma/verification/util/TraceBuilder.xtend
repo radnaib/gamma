@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2023 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -64,6 +64,19 @@ class TraceBuilder {
 	protected final extension TraceUtil traceUtil = TraceUtil.INSTANCE
 	protected final StatechartUtil statechartUtil = StatechartUtil.INSTANCE // For component instance reference
 	
+	// Add annotation
+	
+	def void addTimeUnitAnnotation(ExecutionTrace trace) {
+		val component = trace.component
+		val _package = component.containingPackage
+		val smallestTimeUnit = _package.smallestTimeUnit
+		
+		val timeUnitAnnotation = createTimeUnitAnnotation => [
+			it.timeUnit = smallestTimeUnit
+		]
+		trace.annotations += timeUnitAnnotation
+	}
+	
 	// Add unraised event negations
 	
 	def addUnraisedEventNegations(ExecutionTrace trace) {
@@ -77,11 +90,12 @@ class TraceBuilder {
 			val outputAsserts = step.outEvents
 			
 			for (outputPort : outputPorts) {
-				for (outputEvent : outputPort.outputEvents) {
+				for (outputEvent : outputPort.outputEvents.reject[it.internal]) { // Not for internal events
 					val isRaised = outputAsserts.exists[it.port == outputPort && it.event == outputEvent]
 					if (!isRaised) {
-						val unraisedExpression = outputPort.createRaiseEventAct(outputEvent)
-								.createNotExpression
+						val raiseEventAct = outputPort.createRaiseEventAct(outputEvent)
+						raiseEventAct.arguments.clear // !
+						val unraisedExpression = raiseEventAct.createNotExpression
 						asserts.add(0, unraisedExpression)
 					}
 				}
@@ -96,7 +110,7 @@ class TraceBuilder {
 		for (raiseEventAct : raiseEventActs) {
 			val event = raiseEventAct.event
 			if (event.internal) {
-				raiseEventAct.remove
+				raiseEventAct.removeContainmentChainUntilType(Step)
 			}
 		}
 	}

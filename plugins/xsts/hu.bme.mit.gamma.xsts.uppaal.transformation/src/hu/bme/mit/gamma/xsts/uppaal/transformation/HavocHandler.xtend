@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -20,12 +20,10 @@ import hu.bme.mit.gamma.expression.util.ExpressionEvaluator
 import hu.bme.mit.gamma.uppaal.util.NtaBuilder
 import hu.bme.mit.gamma.util.GammaEcoreUtil
 import hu.bme.mit.gamma.xsts.util.PredicateHandler
-import java.util.logging.Level
 import java.util.logging.Logger
 import org.eclipse.xtend.lib.annotations.Data
 import uppaal.expressions.Expression
 import uppaal.templates.Selection
-import uppaal.types.RangeTypeSpecification
 
 import static extension hu.bme.mit.gamma.expression.derivedfeatures.ExpressionModelDerivedFeatures.*
 
@@ -69,27 +67,34 @@ class HavocHandler {
 	}
 	
 	def dispatch SelectionStruct createSelection(EnumerationTypeDefinition type, VariableDeclaration variable) {
-//		val name = Namings.name
-		val upperLiteral = type.literals.size - 1
-//		
+		val literals = type.literals
+		val upperLiteral = literals.size - 1
+		
 		val lowerBound = ntaBuilder.createLiteralExpression("0")
 		val upperBound = ntaBuilder.createLiteralExpression(upperLiteral.toString)
-//		val selection = ntaBuilder.createIntegerSelection(name, lowerBound, upperBound)
 		
-//		return new SelectionStruct(selection, null)
+		val name = Namings.name
+		val selection = ntaBuilder.createIntegerSelection(name, lowerBound, upperBound)
 		
 		// Limiting the range to actually used literals + another one
-		val integerValueSelection = variable.createSelectionOfIntegerValues // Already contains "else" literal
-		// Selection.variable can be null if it is not compared to anything
-		if (integerValueSelection.selection !== null) {
-			val range = integerValueSelection.selection.typeDefinition as RangeTypeSpecification
-			val bounds = range.bounds
-			bounds.lowerBound = lowerBound
-			bounds.upperBound = upperBound
-		}
-		// Every referenced literal is selected to be complete (as negations can mess things up)
+		val referencableLiterals = literals.reject[it.unused] // Already contains "else" literal
+		// See OptimizerAndVerificationHandler for unused marking
 		
-		return integerValueSelection
+		if (referencableLiterals.size == literals.size) {
+			// A  continuous range, no need for additional guards
+			return new SelectionStruct(selection, null)
+		}
+		
+		val indexes = referencableLiterals.map[it.index]
+		val equalities = newArrayList // Filters the "interesting" values from the range
+		for (integerValue : indexes) {
+			equalities += ntaBuilder.createEqualityExpression(
+				selection, ntaBuilder.createLiteralExpression(integerValue.toString))
+		}
+		
+		val guard = ntaBuilder.wrapIntoOrExpression(equalities)
+		
+		return new SelectionStruct(selection, guard)
 	}
 	
 	def dispatch SelectionStruct createSelection(IntegerTypeDefinition type, VariableDeclaration variable) {
@@ -99,10 +104,10 @@ class HavocHandler {
 	protected def SelectionStruct createSelectionOfIntegerValues(VariableDeclaration variable) {
 		val root = variable.root
 		
-		logger.log(Level.INFO, "Calculating integer values for: " + variable.name)
+		logger.info("Calculating integer values for: " + variable.name)
 		val integerValues = root.calculateIntegerValues(variable) // These are assumed values
 		// Both "valid" and "invalid" integer values are returned for predicates
-		logger.log(Level.INFO, "Finished calculating integer values for: " + variable.name)
+		logger.info("Finished calculating integer values for: " + variable.name)
 		
 		if (integerValues.empty) {
 			// Sometimes input parameters are not referenced
@@ -121,7 +126,7 @@ class HavocHandler {
 			ntaBuilder.createLiteralExpression(max.toString)
 		)
 		
-		logger.log(Level.INFO, "Retrieved integer values for " + variable.name + " havoc: " + integerValues)
+		logger.info("Retrieved integer values for " + variable.name + " havoc: " + integerValues)
 		
 		if (integerValues.size == max - min + 1) {
 			// A  continuous range, no need for additional guards

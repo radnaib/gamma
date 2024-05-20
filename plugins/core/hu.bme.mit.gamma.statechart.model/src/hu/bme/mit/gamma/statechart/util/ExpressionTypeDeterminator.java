@@ -19,7 +19,10 @@ import hu.bme.mit.gamma.statechart.composite.ComponentInstanceElementReferenceEx
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceEventParameterReferenceExpression;
 import hu.bme.mit.gamma.statechart.composite.ComponentInstanceVariableReferenceExpression;
 import hu.bme.mit.gamma.statechart.interface_.EventParameterReferenceExpression;
+import hu.bme.mit.gamma.statechart.interface_.InterfaceParameterReferenceExpression;
+import hu.bme.mit.gamma.statechart.interface_.TimeSpecification;
 import hu.bme.mit.gamma.statechart.statechart.StateReferenceExpression;
+import hu.bme.mit.gamma.statechart.statechart.TimeoutReferenceExpression;
 
 public class ExpressionTypeDeterminator extends ExpressionTypeDeterminator2 {
 	// Singleton
@@ -32,22 +35,28 @@ public class ExpressionTypeDeterminator extends ExpressionTypeDeterminator2 {
 		if (expression instanceof StateReferenceExpression) {
 			return factory.createBooleanTypeDefinition();
 		}
-		else if (expression instanceof EventParameterReferenceExpression) {
-			EventParameterReferenceExpression referenceExpression = (EventParameterReferenceExpression) expression;
+		else if (expression instanceof EventParameterReferenceExpression referenceExpression) {
 			ParameterDeclaration parameter = referenceExpression.getParameter();
 			Type type = parameter.getType();
 			return ecoreUtil.clone(type);
 		}
-		else if (expression instanceof ComponentInstanceVariableReferenceExpression) {
-			ComponentInstanceVariableReferenceExpression reference =
-					(ComponentInstanceVariableReferenceExpression) expression;
+		else if (expression instanceof InterfaceParameterReferenceExpression referenceExpression) {
+			ParameterDeclaration parameter = referenceExpression.getParameter();
+			Type type = parameter.getType();
+			return ecoreUtil.clone(type);
+		}
+		else if (expression instanceof TimeoutReferenceExpression) {
+			return factory.createIntegerTypeDefinition();
+		}
+		else if (expression instanceof TimeSpecification) {
+			return factory.createIntegerTypeDefinition();
+		}
+		else if (expression instanceof ComponentInstanceVariableReferenceExpression reference) {
 			VariableDeclaration variable = reference.getVariableDeclaration();
 			Type declarationType = variable.getType();
 			return ecoreUtil.clone(declarationType);
 		}
-		else if (expression instanceof ComponentInstanceEventParameterReferenceExpression) {
-			ComponentInstanceEventParameterReferenceExpression reference =
-					(ComponentInstanceEventParameterReferenceExpression) expression;
+		else if (expression instanceof ComponentInstanceEventParameterReferenceExpression reference) {
 			ParameterDeclaration parameter = reference.getParameterDeclaration();
 			Type declarationType = parameter.getType();
 			return ecoreUtil.clone(declarationType);

@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2023 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -39,6 +39,7 @@ import hu.bme.mit.gamma.xsts.model.XSTSModelFactory
 import hu.bme.mit.gamma.xsts.model.XTransition
 import hu.bme.mit.gamma.xsts.util.XstsActionUtil
 import java.util.List
+import java.util.logging.Logger
 import org.eclipse.emf.ecore.EObject
 
 import static com.google.common.base.Preconditions.checkState
@@ -56,6 +57,8 @@ class ActionOptimizer {
 	// Model factories
 	protected final ExpressionModelFactory expressionFactory = ExpressionModelFactory.eINSTANCE
 	protected final extension XSTSModelFactory xStsFactory = XSTSModelFactory.eINSTANCE
+	
+	protected final Logger logger = Logger.getLogger("GammaLogger")
 	
 	def optimize(Iterable<? extends XTransition> transitions) {
 		val optimizedTransitions = newArrayList
@@ -76,10 +79,15 @@ class ActionOptimizer {
 	}
 	
 	def optimize(Action action) {
+		val containsParallelAction = action.isOrContainsTypesTransitively(ParallelAction)
+		
+		var i = 0
 		var Action oldXStsAction
 		var Action newXStsAction = action
 		// Until the action cannot be optimized any more
 		while (!oldXStsAction.helperEquals(newXStsAction)) {
+			logger.info("Starting optimization iteration " + i++)
+			
 			oldXStsAction = newXStsAction.clone
 			newXStsAction = newXStsAction
 				/* Cannot use "clone" as local variable actions contain variable declarations and
@@ -94,11 +102,15 @@ class ActionOptimizer {
 				
 			newXStsAction.optimizeAssignmentActions
 			newXStsAction.deleteTrivialNonDeterministicActions
-			newXStsAction = newXStsAction.optimizeParallelActions // Might be resource intensive
+			if (containsParallelAction) {
+				newXStsAction = newXStsAction.optimizeParallelActions // Might be resource intensive
+			}
 			newXStsAction.deleteUnnecessaryAssumeActions // Not correct in other transformation implementations
 			newXStsAction.deleteDefinitelyFalseBranches
+			newXStsAction.deleteDefinitelyFalseBranchesFromAssumptions
 			newXStsAction.optimizeExpressions // Could be extracted to the expression metamodel?
 		}
+		
 		return newXStsAction
 	}
 	
@@ -589,6 +601,7 @@ class ActionOptimizer {
 			val xStsFirstAction = xStsActions.get(i)
 			if (xStsFirstAction instanceof AbstractAssignmentAction) {
 				val lhs = xStsFirstAction.lhs
+				val variable = lhs.accessedDeclaration
 				var foundAssignmentToTheSameVariable = false
 				for (var j = i + 1; j < xStsActions.size && !foundAssignmentToTheSameVariable; j++) {
 					val xStsSecondAction = xStsActions.get(j)
@@ -598,7 +611,6 @@ class ActionOptimizer {
 							var isVariableRead = false
 							for (var k = i + 1; k <= j && !isVariableRead; k++) {
 								val xStsInBetweenAction = xStsActions.get(k)
-								val variable = lhs.accessedDeclaration
 								// Not perfect for arrays: a[0] := 1; b := a[2]; a[0] := 2;
 								val readVariables = xStsInBetweenAction.readVariables
 								if (readVariables.contains(variable)) {
@@ -622,7 +634,8 @@ class ActionOptimizer {
 	}
 	
 	protected def optimizeIfActions(Action action) {
-		val block = action.createSequentialAction // Due to replacement issues
+		val block = (action instanceof SequentialAction) ? action :
+				action.createSequentialAction // Due to replacement issues
 		
 		val xStsIfActions = action.getSelfAndAllContentsOfType(IfAction)
 		for (xStsIfAction : xStsIfActions) {
@@ -631,7 +644,7 @@ class ActionOptimizer {
 			val xStsElseAction = xStsIfAction.^else
 			
 			if (xStsThenAction.nullOrEmptyAction && xStsElseAction.nullOrEmptyAction) {
-				xStsIfAction.remove
+				xStsIfAction.replaceWithEmptyAction
 			}
 			else if (xStsCondition.definitelyTrueExpression) {
 				xStsThenAction.replace(xStsIfAction)
@@ -647,6 +660,7 @@ class ActionOptimizer {
 				xStsIfAction.^else = createEmptyAction
 			}
 		}
+		
 		return block
 	}
 	
@@ -798,7 +812,7 @@ class ActionOptimizer {
 				val firstAction = branch.firstAtomicAction
 				if (firstAction instanceof AssumeAction) {
 					if (firstAction.isDefinitelyFalseAssumeAction) {
-						branch.remove
+						branch.replaceWithEmptyAction
 					}
 					else {
 						branch.deleteDefinitelyFalseBranches
@@ -808,6 +822,41 @@ class ActionOptimizer {
 				// Branch does not contain a 'firstAtomicAction' - full nondeterministic
 				// continue...
 				branch.deleteDefinitelyFalseBranches
+			}
+		}
+	}
+	
+	//
+	
+	protected def void deleteDefinitelyFalseBranchesFromAssumptions(Action action) {
+		val assumeActions = action.getSelfAndAllContentsOfType(AssumeAction)
+		val falseAssumeActions = assumeActions.filter[it.definitelyFalseAssumeAction]
+		for (assumeAction : falseAssumeActions) {
+			val nondeterministicBranch = assumeAction.getChildOfContainerOfType(NonDeterministicAction)
+			val ifBranch = assumeAction.getChildOfContainerOfType(IfAction)
+			var targetIf = true
+			if (nondeterministicBranch !== null && ifBranch !== null) {
+				targetIf = nondeterministicBranch.containsTransitively(ifBranch)
+			}
+			if (ifBranch !== null && targetIf) {
+				// Note that the (negated) condition should be prepended to the then or else branch
+				// But we don't do this, as we expect correct models
+				val ifAction = ifBranch.eContainer as IfAction
+				val then = ifAction.then
+				val _else = ifAction.^else
+				
+				if (ifBranch === then) {
+					_else.replace(ifAction)
+				}
+				else {
+					then.replace(ifAction)
+				}
+			}
+			else if (nondeterministicBranch !== null) {
+				nondeterministicBranch.remove
+			}
+			else {
+				// Both are null, so the whole transition must be removed: should not happen in practice
 			}
 		}
 	}

@@ -22,7 +22,6 @@ import hu.bme.mit.gamma.util.GammaEcoreUtil
 import hu.bme.mit.gamma.verification.util.TraceBuilder
 import java.util.NoSuchElementException
 import java.util.Scanner
-import java.util.logging.Level
 import java.util.logging.Logger
 
 import static com.google.common.base.Preconditions.checkState
@@ -89,12 +88,12 @@ class TraceBackAnnotator {
 			it.import = this.gammaPackage
 			it.name = this.component.name + "Trace"
 		]
+		trace.addTimeUnitAnnotation
 		val topComponentArguments = gammaPackage.topComponentArguments
 		// Note that the top component does not contain parameter declarations anymore due to the preprocessing
 		checkState(topComponentArguments.size == component.parameterDeclarations.size, 
 			"The number of top component arguments and top component parameters are not equal: " +
 				topComponentArguments.size + " - " + component.parameterDeclarations.size)
-		logger.log(Level.INFO, "The number of top component arguments is " + topComponentArguments.size)
 		trace.arguments += topComponentArguments.map[it.clone]
 		var step = createStep
 		trace.steps += step
@@ -216,10 +215,6 @@ class TraceBackAnnotator {
 			}
 			// Checking the last state (in events must NOT be deleted here though)
 			step.checkStates
-			// Sorting if needed
-			if (sortTrace) {
-				trace.sortInstanceStates
-			}
 		} catch (NoSuchElementException e) {
 			// If there are not enough lines, that means there are no environment actions
 			step.actions += createReset
@@ -228,6 +223,10 @@ class TraceBackAnnotator {
 		trace.removeInternalEventRaiseActs
 		trace.removeTransientVariableReferences // They always have default values
 		trace.addUnraisedEventNegations
+		
+		if (sortTrace) {
+			trace.sortInstanceStates
+		}
 		
 		return trace
 	}

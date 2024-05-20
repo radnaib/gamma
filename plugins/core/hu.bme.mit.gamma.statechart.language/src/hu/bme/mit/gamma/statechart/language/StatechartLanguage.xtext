@@ -161,7 +161,7 @@ PortEventReference returns PortEventReference:
 ;
 
 Port returns InterfaceModel::Port:
-	'port' name=ID ':' interfaceRealization=InterfaceRealization
+	'port' name=ID ':' interfaceRealization=InterfaceRealization ('{' (('invariant' invariants+=Expression)((',')? 'invariant' invariants+=Expression)*)? '}')?
 ;
 
 InterfaceRealization returns InterfaceModel::InterfaceRealization:
@@ -549,8 +549,15 @@ TimeSpecification returns InterfaceModel::TimeSpecification:
 	value=AdditiveExpression unit=TimeUnit
 ;
 
+@Override
+LiteralExpression returns ExpressionModel::Expression: 
+	super |
+	('time' TimeSpecification)
+;
+
+
 enum TimeUnit returns InterfaceModel::TimeUnit:
-	MILLISECOND = 'ms' | SECOND = 's' | HOUR = 'h'
+	NANOSECOND = 'ns' | MICROSECOND = 'μs' | MILLISECOND = 'ms' | SECOND = 's' | HOUR = 'h'
 ;
 
 ControlSpecificaiton returns CompositeModel::ControlSpecification:
@@ -626,6 +633,7 @@ Interface returns InterfaceModel::Interface:
 	{InterfaceModel::Interface}
 	'interface' name=ID ('extends' (parents+=[InterfaceModel::Interface]) (',' (parents+=[InterfaceModel::Interface]))* )? '{'
 		((events+=EventDeclaration))*
+		('invariant' invariants+=Expression)*
 	'}'
 ;
 
@@ -652,6 +660,8 @@ enum Persistency returns InterfaceModel::Persistency:
 PrimaryExpression returns ExpressionModel::Expression: 
 	super |
 	EventParameterReferenceExpression |
+	InterfaceParameterReferenceExpression |
+	TimeoutReferenceExpression |
 	( EventReference '::' ) | // Now this are not usable only in triggers
 	StateReferenceExpression
 ;
@@ -663,6 +673,13 @@ StateReferenceExpression returns StateReferenceExpression:
 EventParameterReferenceExpression returns InterfaceModel::EventParameterReferenceExpression:
 	port=[InterfaceModel::Port] '.' event=[InterfaceModel::Event] '::' parameter=[ExpressionModel::ParameterDeclaration];
 
+InterfaceParameterReferenceExpression returns InterfaceModel::InterfaceParameterReferenceExpression:
+	//this is a placeholder for the language to be unambiguous
+	'this' '.' event=[InterfaceModel::Event] '::' parameter=[ExpressionModel::ParameterDeclaration];
+	
+TimeoutReferenceExpression returns TimeoutReferenceExpression:
+	'time-elapsed' '(' timeout=[TimeoutDeclaration] ')'
+;
 
 // Action Language Extensions
 

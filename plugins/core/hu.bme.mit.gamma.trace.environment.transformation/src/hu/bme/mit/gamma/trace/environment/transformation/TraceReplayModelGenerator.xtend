@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2022 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -32,6 +32,7 @@ class TraceReplayModelGenerator {
 	protected final String envrionmentModelName
 	protected final EnvironmentModel environmentModel
 	protected final boolean considerOutEvents
+	protected final boolean handleOutEventPassing
 	
 	protected final extension StatechartUtil statechartUtil = StatechartUtil.INSTANCE
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
@@ -44,6 +45,10 @@ class TraceReplayModelGenerator {
 		this.envrionmentModelName = envrionmentModelName
 		this.environmentModel = environmentModel
 		this.considerOutEvents = considerOutEvents
+		this.handleOutEventPassing = considerOutEvents &&
+				testModel.ports.reject[it.internal]
+					.reject[it.broadcast]
+					.exists[it.hasOutputEvents] // Only if there is a valid out-event on a non-broadcast port
 	}
 	
 	/**
@@ -52,7 +57,7 @@ class TraceReplayModelGenerator {
 	 */
 	def execute() {
 		val transformer = new TraceToEnvironmentModelTransformer(envrionmentModelName,
-				considerOutEvents, executionTrace, environmentModel)
+				handleOutEventPassing, executionTrace, environmentModel)
 		val result = transformer.execute
 		
 		val environmentModel = result.statechart
@@ -71,10 +76,8 @@ class TraceReplayModelGenerator {
 		environmentInstance.name = environmentInstance.name.toFirstLower
 		systemModel.prependComponentInstance(environmentInstance)
 		
-		val isEveryOutPortBroadcast = systemModel.ports
-				.forall[it.broadcastOrBroadcastMatcher]
 		if (considerOutEvents) {
-			if (!isEveryOutPortBroadcast) {
+			if (handleOutEventPassing) {
 				// Special scheduling for not broadcast port handling
 				systemModel.initialExecutionList += environmentInstance.createInstanceReference // Initial out-raises
 				
@@ -109,6 +112,16 @@ class TraceReplayModelGenerator {
 					}
 				}
 			}
+			// To allow for triggering the execution of async environment statechart
+			if (environmentModel.asynchronous) {
+				val asyncInputPort = environmentModel.ports.findFirst[it.hasInputEvents] // Must not be null
+				val systemAsyncInputPort = asyncInputPort.clone
+				systemModel.ports += systemAsyncInputPort
+				
+				systemModel.portBindings += systemAsyncInputPort.createPortBinding(
+					environmentInstance.createInstancePortReference(asyncInputPort))
+			}
+			//
 		}
 		else {
 			for (portBinding : portBindings) {
@@ -134,8 +147,10 @@ class TraceReplayModelGenerator {
 			val componentPort = portPair.key
 			val environmentPort = portPair.value
 			
-			systemModel.channels += connectPortsViaChannels(
-				componentInstance, componentPort, environmentInstance, environmentPort)
+			if (!componentPort.internal) { // Not connecting internal ports
+				systemModel.channels += connectPortsViaChannels(
+						componentInstance, componentPort, environmentInstance, environmentPort)
+			}
 		}
 		
 		// Wrapping the resulting packages
@@ -144,6 +159,7 @@ class TraceReplayModelGenerator {
 		systemPackage.name = testModelPackage.name // So test generation remains simple
 		
 		environmentPackage.imports += testModelPackage.componentImports // E.g., interfaces and types
+		environmentPackage.imports += environmentModel.importableInterfacePackages
 		systemPackage.imports += environmentPackage
 		systemPackage.imports += testModelPackage
 		systemPackage.imports += systemModel.importableInterfacePackages // If ports were not cleared

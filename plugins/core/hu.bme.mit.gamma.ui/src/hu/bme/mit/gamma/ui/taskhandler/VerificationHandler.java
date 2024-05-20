@@ -39,12 +39,15 @@ import hu.bme.mit.gamma.expression.model.EnumerationLiteralDefinition;
 import hu.bme.mit.gamma.expression.model.EnumerationTypeDefinition;
 import hu.bme.mit.gamma.expression.model.VariableDeclaration;
 import hu.bme.mit.gamma.genmodel.model.AnalysisLanguage;
+import hu.bme.mit.gamma.genmodel.model.GenmodelModelFactory;
 import hu.bme.mit.gamma.genmodel.model.ProgrammingLanguage;
+import hu.bme.mit.gamma.genmodel.model.TestGeneration;
 import hu.bme.mit.gamma.genmodel.model.Verification;
 import hu.bme.mit.gamma.nuxmv.verification.NuxmvVerification;
 import hu.bme.mit.gamma.plantuml.serialization.SvgSerializer;
 import hu.bme.mit.gamma.plantuml.transformation.TraceToPlantUmlTransformer;
 import hu.bme.mit.gamma.promela.verification.PromelaVerification;
+import hu.bme.mit.gamma.property.derivedfeatures.PropertyModelDerivedFeatures;
 import hu.bme.mit.gamma.property.model.CommentableStateFormula;
 import hu.bme.mit.gamma.property.model.PropertyPackage;
 import hu.bme.mit.gamma.property.model.StateFormula;
@@ -186,10 +189,6 @@ public class VerificationHandler extends TaskHandler {
 		}
 		//
 		
-		String[] arguments = verificationArguments.isEmpty() ?
-				verificationTask.getDefaultArguments(modelFile) :
-					verificationArguments.toArray(new String[verificationArguments.size()]);
-		
 		boolean isOptimize = verification.isOptimize();
 		
 		// Retrieved traces
@@ -246,6 +245,15 @@ public class VerificationHandler extends TaskHandler {
 		if (isOptimize) {
 			removeCoveredProperties(formulaQueue);
 		}
+		
+		boolean areAllPropertiesInvariants = verification.getQueryFiles().isEmpty() &&
+				verification.getPropertyPackages().stream()
+					.allMatch(it -> PropertyModelDerivedFeatures.areAllPropertiesInvariants(it));
+		String[] arguments = verificationArguments.isEmpty() ?
+				(areAllPropertiesInvariants ?
+						verificationTask.getDefaultArgumentsForInvarianceChecking(modelFile) : 
+							verificationTask.getDefaultArguments(modelFile)) :
+					verificationArguments.toArray(new String[verificationArguments.size()]);
 		
 		// Execution
 		while (!formulaQueue.isEmpty()) {
@@ -307,8 +315,9 @@ public class VerificationHandler extends TaskHandler {
 		}
 		
 		traces.addAll(retrievedTraces);
+		
 		if (serializeTraces) { // After 'traces.add...'
-			serializeTraces();
+			serializeTraces(programmingLanguage);
 		}
 		
 		// Note that .get and .json postfix ids will not match if optimization is applied
@@ -378,23 +387,41 @@ public class VerificationHandler extends TaskHandler {
 				}
 			}
 		}
+		// Note that variable references cannot be handled like this, as they can be (and are) removed  if their value
+		// is known every time they are references (but this value can change), e.g., a:= 1; b := a + 2; a := 3; b := a + 4;
 	}
 	
-	private void removeCoveredProperties(Queue<Entry<String, StateFormula>> formulaQueue) {
-		removeCoveredProperties(traces, formulaQueue);
+	protected void removeCoveredProperties2(Collection<? extends CommentableStateFormula> formulas) {
+		Collection<Entry<?, StateFormula>> wrappedFormulas = new ArrayList<Entry<?, StateFormula>>();
+		
+		final String dummyKey = "";
+		for (CommentableStateFormula commentableStateFormula : formulas) {
+			StateFormula formula = commentableStateFormula.getFormula();
+			Entry<?, StateFormula> entry = Map.entry(dummyKey, formula);
+			
+			wrappedFormulas.add(entry);
+		}
+		//
+		removeCoveredProperties(wrappedFormulas);
+		//
+		formulas.removeIf(it -> !wrappedFormulas.contains(Map.entry(dummyKey, it.getFormula())));
+	}
+	
+	protected void removeCoveredProperties(Collection<? extends Entry<?, StateFormula>> formulas) {
+		removeCoveredProperties(traces, formulas);
 	}
 	
 	private void removeCoveredProperties(Collection<? extends ExecutionTrace> traces,
-			Queue<Entry<String, StateFormula>> formulaQueue) {
+			Collection<? extends Entry<?, StateFormula>> formulas) {
 		for (ExecutionTrace trace : traces) {
-			removeCoveredProperties(trace, formulaQueue);
+			removeCoveredProperties(trace, formulas);
 		}
 	}
 
 	private void removeCoveredProperties(ExecutionTrace trace,
-			Queue<Entry<String, StateFormula>> formulaQueue) {
+			Collection<? extends Entry<?, StateFormula>> formulas) {
 		if (trace != null) {
-			List<StateFormula> stateFormulas = formulaQueue.stream()
+			List<StateFormula> stateFormulas = formulas.stream()
 					.map(it -> it.getValue())
 					.filter(it -> it != null)
 					.collect(Collectors.toList()); // Not null state formulas
@@ -404,7 +431,7 @@ public class VerificationHandler extends TaskHandler {
 			for (StateFormula coveredProperty : coveredProperties) {
 				String serializedProperty = propertySerializer.serialize(coveredProperty);
 				logger.info("Property already covered: " + serializedProperty);
-				formulaQueue.removeIf(it -> it.getValue() == coveredProperty);
+				formulas.removeIf(it -> it.getValue() == coveredProperty);
 			}
 		}
 	}
@@ -493,15 +520,20 @@ public class VerificationHandler extends TaskHandler {
 		traceUtil.removeCoveredExecutionTraces(traces);
 	}
 	
-	public void serializeTraces() throws IOException {
+	public void serializeTraces(ProgrammingLanguage programmingLanguage) throws IOException {
 		// Serializing
 		String testFolderUri = serializeTest ? this.testFolderUri : null;
 		String testFileName = serializeTest ? this.testFileName : null;
 		String packageName = serializeTest ? this.packageName : null;
 		for (ExecutionTrace trace : traces) {
 			serializer.serialize(targetFolderUri, traceFileName, svgFileName,
-					testFolderUri, testFileName, packageName, programmingLanguage, trace);
+					testFolderUri, testFileName, packageName, trace,
+					file, programmingLanguage);
 		}
+	}
+	
+	public ProgrammingLanguage getProgrammingLanguage() {
+		return this.programmingLanguage;
 	}
 	
 	//
@@ -515,19 +547,19 @@ public class VerificationHandler extends TaskHandler {
 		protected final FileUtil fileUtil = FileUtil.INSTANCE;
 		protected final ModelSerializer serializer = ModelSerializer.INSTANCE;
 		
-		public void serialize(String traceFolderUri, String traceFileName, ExecutionTrace trace) throws IOException {
-			this.serialize(traceFolderUri, traceFileName, null, null, null, trace);
+		public void serialize(String traceFolderUri, String traceFileName, ExecutionTrace trace, IFile file, ProgrammingLanguage programmingLanguage) throws IOException {
+			this.serialize(traceFolderUri, traceFileName, null, null, null, trace, file, programmingLanguage);
 		}
 		
 		public void serialize(String traceFolderUri, String traceFileName,
-				String testFolderUri, String testFileName, String basePackage, ExecutionTrace trace) throws IOException {
-			this.serialize(traceFolderUri, traceFileName, null, testFolderUri, testFileName, basePackage,
-					ProgrammingLanguage.JAVA, trace);
+				String testFolderUri, String testFileName, String basePackage, ExecutionTrace trace,
+				IFile file, ProgrammingLanguage programmingLanguage) throws IOException {
+			this.serialize(traceFolderUri, traceFileName, null, testFolderUri, testFileName, basePackage, trace, file, programmingLanguage);
 		}
 		
 		public void serialize(String traceFolderUri, String traceFileName, String svgFileName,
-				String testFolderUri, String testFileName, String basePackage,
-				ProgrammingLanguage programmingLanguage, ExecutionTrace trace) throws IOException {
+				String testFolderUri, String testFileName, String basePackage, ExecutionTrace trace,
+				IFile file, ProgrammingLanguage programmingLanguage) throws IOException {
 			
 			// Model
 			Entry<String, Integer> fileNamePair = fileUtil.getFileName(new File(traceFolderUri),
@@ -547,16 +579,23 @@ public class VerificationHandler extends TaskHandler {
 			}
 			
 			// Test
-			boolean serializeTest = programmingLanguage != null;
+			boolean serializeTest = testFolderUri != null && testFileName != null && basePackage != null;
 			if (serializeTest) {
-				switch (programmingLanguage) {
-					case JAVA:
-						String className = testFileName + id;
-						serializeJavaTestCase(testFolderUri, basePackage, className, trace);
-						break;
-					default:
-						throw new IllegalArgumentException("Not supported programming language: " + programmingLanguage);
-				}
+				TestGeneration testGeneration = GenmodelModelFactory.eINSTANCE.createTestGeneration();
+				testGeneration.setExecutionTrace(trace);
+				
+				String className = testFileName + id;
+				testGeneration.getFileName().add(className);
+				testGeneration.getProgrammingLanguages().add(programmingLanguage);
+				
+				TestGenerationHandler testGenerationHandler = new TestGenerationHandler(file);
+				testGenerationHandler.execute(testGeneration, basePackage);
+			
+//				TestGenerator testGenerator = new TestGenerator(trace, basePackage, className);
+//				String testCode = testGenerator.execute();
+//				String packageUri = testGenerator.getPackageName().replaceAll("\\.", "/");
+//				fileUtil.saveString(testFolderUri + File.separator + packageUri +
+//					File.separator + className + ".java", testCode);
 			}
 		}
 
