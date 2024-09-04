@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2023 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -10,6 +10,8 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.expression.util;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -26,8 +28,10 @@ import hu.bme.mit.gamma.expression.model.ArgumentedElement;
 import hu.bme.mit.gamma.expression.model.ArrayAccessExpression;
 import hu.bme.mit.gamma.expression.model.ArrayLiteralExpression;
 import hu.bme.mit.gamma.expression.model.BinaryExpression;
+import hu.bme.mit.gamma.expression.model.BooleanTypeDefinition;
 import hu.bme.mit.gamma.expression.model.ConstantDeclaration;
 import hu.bme.mit.gamma.expression.model.DecimalLiteralExpression;
+import hu.bme.mit.gamma.expression.model.DecimalTypeDefinition;
 import hu.bme.mit.gamma.expression.model.Declaration;
 import hu.bme.mit.gamma.expression.model.DirectReferenceExpression;
 import hu.bme.mit.gamma.expression.model.DivideExpression;
@@ -37,6 +41,7 @@ import hu.bme.mit.gamma.expression.model.EnumerationTypeDefinition;
 import hu.bme.mit.gamma.expression.model.EqualityExpression;
 import hu.bme.mit.gamma.expression.model.EquivalenceExpression;
 import hu.bme.mit.gamma.expression.model.Expression;
+import hu.bme.mit.gamma.expression.model.ExpressionModelFactory;
 import hu.bme.mit.gamma.expression.model.FalseExpression;
 import hu.bme.mit.gamma.expression.model.FunctionAccessExpression;
 import hu.bme.mit.gamma.expression.model.GreaterEqualExpression;
@@ -46,6 +51,7 @@ import hu.bme.mit.gamma.expression.model.ImplyExpression;
 import hu.bme.mit.gamma.expression.model.InequalityExpression;
 import hu.bme.mit.gamma.expression.model.IntegerLiteralExpression;
 import hu.bme.mit.gamma.expression.model.IntegerRangeLiteralExpression;
+import hu.bme.mit.gamma.expression.model.IntegerTypeDefinition;
 import hu.bme.mit.gamma.expression.model.LessEqualExpression;
 import hu.bme.mit.gamma.expression.model.LessExpression;
 import hu.bme.mit.gamma.expression.model.MultiplyExpression;
@@ -53,9 +59,11 @@ import hu.bme.mit.gamma.expression.model.NotExpression;
 import hu.bme.mit.gamma.expression.model.OrExpression;
 import hu.bme.mit.gamma.expression.model.ParameterDeclaration;
 import hu.bme.mit.gamma.expression.model.RationalLiteralExpression;
+import hu.bme.mit.gamma.expression.model.RationalTypeDefinition;
 import hu.bme.mit.gamma.expression.model.ReferenceExpression;
 import hu.bme.mit.gamma.expression.model.SubtractExpression;
 import hu.bme.mit.gamma.expression.model.TrueExpression;
+import hu.bme.mit.gamma.expression.model.TypeDefinition;
 import hu.bme.mit.gamma.expression.model.UnaryMinusExpression;
 import hu.bme.mit.gamma.expression.model.XorExpression;
 import hu.bme.mit.gamma.util.GammaEcoreUtil;
@@ -67,7 +75,37 @@ public class ExpressionEvaluator {
 	//
 
 	protected final ArgumentInliner argumentInliner = ArgumentInliner.INSTANCE;
+	protected final ExpressionTypeDeterminator2 typeDeterminator = ExpressionTypeDeterminator2.INSTANCE;
 	protected final GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE;
+	protected final ExpressionModelFactory factory = ExpressionModelFactory.eINSTANCE;
+	//
+	
+	public Expression evaluateExpression(Expression expression) {
+		TypeDefinition type = typeDeterminator.getTypeDefinition(expression);
+		if (type instanceof BooleanTypeDefinition) {
+			boolean value = evaluateBoolean(expression);
+			return (value) ? factory.createTrueExpression() : factory.createFalseExpression();
+		}
+		if (type instanceof IntegerTypeDefinition) {
+			int value = evaluateInteger(expression);
+			IntegerLiteralExpression literal = factory.createIntegerLiteralExpression();
+			BigInteger bigIntegerValue = BigInteger.valueOf(value);
+			literal.setValue(bigIntegerValue);
+			return literal;
+		}
+		if (type instanceof RationalTypeDefinition || type instanceof DecimalTypeDefinition) {
+			double value = evaluateDecimal(expression);
+			DecimalLiteralExpression literal = factory.createDecimalLiteralExpression();
+			BigDecimal bigDecimalValue = BigDecimal.valueOf(value);
+			literal.setValue(bigDecimalValue);
+			return literal;
+		}
+		
+		// None of the above
+		return expression;
+	}
+	
+	//
 	
 	public int evaluate(Expression expression) {
 		try {
@@ -79,15 +117,12 @@ public class ExpressionEvaluator {
 	
 	// Integers (and enums)
 	public int evaluateInteger(Expression expression) {
-		if (expression instanceof DirectReferenceExpression) {
-			DirectReferenceExpression referenceExpression = (DirectReferenceExpression) expression;
+		if (expression instanceof DirectReferenceExpression referenceExpression) {
 			Declaration declaration = referenceExpression.getDeclaration();
-			if (declaration instanceof ConstantDeclaration) {
-				ConstantDeclaration constantDeclaration = (ConstantDeclaration) declaration;
+			if (declaration instanceof ConstantDeclaration constantDeclaration) {
 				return evaluateInteger(constantDeclaration.getExpression());
 			}
-			if (declaration instanceof ParameterDeclaration) {
-				ParameterDeclaration parameterDeclaration = (ParameterDeclaration) declaration;
+			if (declaration instanceof ParameterDeclaration parameterDeclaration) {
 				Expression argument = evaluateParameter(parameterDeclaration);
 				return evaluateInteger(argument);
 			}
@@ -95,19 +130,16 @@ public class ExpressionEvaluator {
 				throw new IllegalArgumentException("Not evaluable expression: " + expression.toString());
 			}
 		}
-		if (expression instanceof IntegerLiteralExpression) {
-			IntegerLiteralExpression integerLiteralExpression = (IntegerLiteralExpression) expression;
+		if (expression instanceof IntegerLiteralExpression integerLiteralExpression) {
 			return integerLiteralExpression.getValue().intValue();
 		}
-		if (expression instanceof EnumerationLiteralExpression) {
-			EnumerationLiteralExpression enumerationLiteralExpression = (EnumerationLiteralExpression) expression;
+		if (expression instanceof EnumerationLiteralExpression enumerationLiteralExpression) {
 			EnumerationLiteralDefinition enumLiteral = enumerationLiteralExpression.getReference();
 			EnumerationTypeDefinition type = (EnumerationTypeDefinition) enumLiteral.eContainer();
 			List<EnumerationLiteralDefinition> literals = type.getLiterals();
 			return literals.indexOf(enumLiteral);
 		}
-		if (expression instanceof ArrayAccessExpression) {
-			ArrayAccessExpression arrayAccessExpression = (ArrayAccessExpression) expression;
+		if (expression instanceof ArrayAccessExpression arrayAccessExpression) {
 			Expression index = arrayAccessExpression.getIndex();
 			Expression operand = arrayAccessExpression.getOperand();
 			if (operand instanceof ArrayLiteralExpression) {
@@ -118,8 +150,7 @@ public class ExpressionEvaluator {
 								evaluateInteger(index)));
 			}
 		}
-		if (expression instanceof MultiplyExpression) {
-			MultiplyExpression multiplyExpression = (MultiplyExpression) expression;
+		if (expression instanceof MultiplyExpression multiplyExpression) {
 			List<Expression> operands = multiplyExpression.getOperands();
 			List<Integer> evaluatedOperands = new ArrayList<Integer>();
 			IllegalArgumentException potentialException = null;
@@ -143,9 +174,7 @@ public class ExpressionEvaluator {
 			}
 			return evaluatedOperands.stream().reduce(1, (p1, p2) -> p1 * p2);
 		}
-		if (expression instanceof DivideExpression) {
-			DivideExpression divideExpression = (DivideExpression) expression;
-			//
+		if (expression instanceof DivideExpression divideExpression) {
 			int evaluatedNumerator = evaluateInteger(divideExpression.getLeftOperand());
 			if (evaluatedNumerator == 0) {
 				return 0;
@@ -153,8 +182,7 @@ public class ExpressionEvaluator {
 			//
 			return evaluatedNumerator / evaluateInteger(divideExpression.getRightOperand());
 		}
-		if (expression instanceof AddExpression) {
-			AddExpression addExpression = (AddExpression) expression;
+		if (expression instanceof AddExpression addExpression) {
 			List<Expression> operands = addExpression.getOperands();
 			// Potential optimization
 			List<Expression> negativeOperandPairs = getNegativeExpressionPairs(operands);
@@ -165,9 +193,7 @@ public class ExpressionEvaluator {
 			return evaluableOperands.stream().map(it -> evaluateInteger(it))
 					.reduce(0, (p1, p2) -> p1 + p2);
 		}
-		if (expression instanceof SubtractExpression) {
-			SubtractExpression subtractExpression = (SubtractExpression) expression;
-			//
+		if (expression instanceof SubtractExpression subtractExpression) {
 			Expression leftOperand = subtractExpression.getLeftOperand();
 			Expression rightOperand = subtractExpression.getRightOperand();
 			
@@ -177,13 +203,11 @@ public class ExpressionEvaluator {
 			//
 			return evaluateInteger(leftOperand) - evaluateInteger(rightOperand);
 		}
-		if (expression instanceof FunctionAccessExpression) {
-			FunctionAccessExpression functionAccessExpression = (FunctionAccessExpression) expression;
+		if (expression instanceof FunctionAccessExpression functionAccessExpression) {
 			Expression inlinedLambaExpression = argumentInliner.createInlinedLambaExpression(functionAccessExpression);
 			return evaluateInteger(inlinedLambaExpression);
 		}
-		if (expression instanceof IfThenElseExpression) {
-			IfThenElseExpression ifThenElseExpression = (IfThenElseExpression) expression;
+		if (expression instanceof IfThenElseExpression ifThenElseExpression) {
 			Expression condition = ifThenElseExpression.getCondition();
 			if (evaluateBoolean(condition)) {
 				return evaluateInteger(
@@ -231,15 +255,12 @@ public class ExpressionEvaluator {
 
 	// Decimal and rational
 	public double evaluateDecimal(Expression expression) {
-		if (expression instanceof DirectReferenceExpression) {
-			final DirectReferenceExpression referenceExpression = (DirectReferenceExpression) expression;
+		if (expression instanceof DirectReferenceExpression referenceExpression) {
 			Declaration declaration = referenceExpression.getDeclaration();
-			if (declaration instanceof ConstantDeclaration) {
-				final ConstantDeclaration constantDeclaration = (ConstantDeclaration) declaration;
+			if (declaration instanceof ConstantDeclaration constantDeclaration) {
 				return evaluateDecimal(constantDeclaration.getExpression());
 			}
-			if (declaration instanceof ParameterDeclaration) {
-				final ParameterDeclaration parameterDeclaration = (ParameterDeclaration) declaration;
+			if (declaration instanceof ParameterDeclaration parameterDeclaration) {
 				final Expression argument = evaluateParameter(parameterDeclaration);
 				return evaluateDecimal(argument);
 			}
@@ -247,27 +268,23 @@ public class ExpressionEvaluator {
 				throw new IllegalArgumentException("Not transformable expression: " + expression.toString());
 			}
 		}
-		if (expression instanceof IntegerLiteralExpression) {
-			final IntegerLiteralExpression integerLiteralExpression = (IntegerLiteralExpression) expression;
+		if (expression instanceof IntegerLiteralExpression integerLiteralExpression) {
 			return (double) integerLiteralExpression.getValue().intValue();
 		}
-		if (expression instanceof DecimalLiteralExpression) {
-			final DecimalLiteralExpression decimalLiteralExpression = (DecimalLiteralExpression) expression;
+		if (expression instanceof DecimalLiteralExpression decimalLiteralExpression) {
 			return decimalLiteralExpression.getValue().doubleValue();
 		}
-		if (expression instanceof RationalLiteralExpression) {
-			final RationalLiteralExpression rationalLiteralExpression = (RationalLiteralExpression) expression;
+		if (expression instanceof RationalLiteralExpression rationalLiteralExpression) {
 			return rationalLiteralExpression.getNumerator().doubleValue() /
 					rationalLiteralExpression.getDenominator().doubleValue();
 		}
-		if (expression instanceof EnumerationLiteralExpression) {
-			EnumerationLiteralDefinition enumLiteral = ((EnumerationLiteralExpression) expression).getReference();
+		if (expression instanceof EnumerationLiteralExpression literalExpression) {
+			EnumerationLiteralDefinition enumLiteral = literalExpression.getReference();
 			EnumerationTypeDefinition type = (EnumerationTypeDefinition) enumLiteral.eContainer();
 			List<EnumerationLiteralDefinition> literals = type.getLiterals();
 			return (double) literals.indexOf(enumLiteral);
 		}
-		if (expression instanceof ArrayAccessExpression) {
-			ArrayAccessExpression arrayAccessExpression = (ArrayAccessExpression) expression;
+		if (expression instanceof ArrayAccessExpression arrayAccessExpression) {
 			Expression index = arrayAccessExpression.getIndex();
 			Expression operand = arrayAccessExpression.getOperand();
 			if (operand instanceof ArrayLiteralExpression) {
@@ -278,8 +295,7 @@ public class ExpressionEvaluator {
 								evaluateInteger(index)));
 			}
 		}
-		if (expression instanceof MultiplyExpression) {
-			final MultiplyExpression multiplyExpression = (MultiplyExpression) expression;
+		if (expression instanceof MultiplyExpression multiplyExpression) {
 			List<Expression> operands = multiplyExpression.getOperands();
 			List<Double> evaluatedOperands = new ArrayList<Double>();
 			IllegalArgumentException potentialException = null;
@@ -303,9 +319,7 @@ public class ExpressionEvaluator {
 			}
 			return evaluatedOperands.stream().reduce(1.0, (p1, p2) -> p1 * p2);
 		}
-		if (expression instanceof DivideExpression) {
-			final DivideExpression divideExpression = (DivideExpression) expression;
-			//
+		if (expression instanceof DivideExpression divideExpression) {
 			double evaluatedNumerator = evaluateDecimal(divideExpression.getLeftOperand());
 			if (evaluatedNumerator == 0.0) {
 				return 0.0;
@@ -313,8 +327,7 @@ public class ExpressionEvaluator {
 			//
 			return evaluatedNumerator / evaluateDecimal(divideExpression.getRightOperand());
 		}
-		if (expression instanceof AddExpression) {
-			final AddExpression addExpression = (AddExpression) expression;
+		if (expression instanceof AddExpression addExpression) {
 			List<Expression> operands = addExpression.getOperands();
 			// Potential optimization
 			List<Expression> negativeOperandPairs = getNegativeExpressionPairs(operands);
@@ -325,9 +338,7 @@ public class ExpressionEvaluator {
 			return evaluableOperands.stream().map(it -> evaluateDecimal(it))
 					.reduce(0.0, (p1, p2) -> p1 + p2);
 		}
-		if (expression instanceof SubtractExpression) {
-			final SubtractExpression subtractExpression = (SubtractExpression) expression;
-			
+		if (expression instanceof SubtractExpression subtractExpression) {
 			// Potential optimization trick
 			Expression leftOperand = subtractExpression.getLeftOperand();
 			Expression rightOperand = subtractExpression.getRightOperand();
@@ -350,20 +361,17 @@ public class ExpressionEvaluator {
 		if (expression instanceof FalseExpression) {
 			return false;
 		}
-		if (expression instanceof ArrayAccessExpression) {
-			ArrayAccessExpression arrayAccessExpression = (ArrayAccessExpression) expression;
+		if (expression instanceof ArrayAccessExpression arrayAccessExpression) {
 			Expression index = arrayAccessExpression.getIndex();
 			Expression operand = arrayAccessExpression.getOperand();
-			if (operand instanceof ArrayLiteralExpression) {
-				ArrayLiteralExpression arrayLiteralExpression = (ArrayLiteralExpression) operand;
+			if (operand instanceof ArrayLiteralExpression arrayLiteralExpression) {
 				List<Expression> operands = arrayLiteralExpression.getOperands();
 				return evaluateBoolean(
 						operands.get(
 								evaluateInteger(index)));
 			}
 		}
-		if (expression instanceof AndExpression) {
-			AndExpression andExpression = (AndExpression) expression;
+		if (expression instanceof AndExpression andExpression) {
 			IllegalArgumentException unevaluableException = null;
 			for (Expression subExpression : andExpression.getOperands()) {
 				try {
@@ -388,8 +396,7 @@ public class ExpressionEvaluator {
 			}
 			return true; // All subexpressions evaluated to true
 		}
-		if (expression instanceof OrExpression) {
-			OrExpression orExpression = (OrExpression) expression;
+		if (expression instanceof OrExpression orExpression) {
 			IllegalArgumentException unevaluableException = null;
 			for (Expression subExpression : orExpression.getOperands()) {
 				try {
@@ -415,12 +422,10 @@ public class ExpressionEvaluator {
 			}
 			return positiveCount % 2 == 1;
 		}
-		if (expression instanceof NotExpression) {
-			NotExpression notExpression = (NotExpression) expression;
+		if (expression instanceof NotExpression notExpression) {
 			return !evaluateBoolean(notExpression.getOperand());
 		}
-		if (expression instanceof BinaryExpression) {
-			BinaryExpression binaryExpression = (BinaryExpression) expression;
+		if (expression instanceof BinaryExpression binaryExpression) {
 			Expression left = binaryExpression.getLeftOperand();
 			Expression right = binaryExpression.getRightOperand();
 			//
@@ -479,15 +484,12 @@ public class ExpressionEvaluator {
 				return evaluate(left) >= evaluate(right);
 			}
 		}
-		if (expression instanceof DirectReferenceExpression) {
-			DirectReferenceExpression referenceExpression = (DirectReferenceExpression) expression;
+		if (expression instanceof DirectReferenceExpression referenceExpression) {
 			Declaration declaration = referenceExpression.getDeclaration();
-			if (declaration instanceof ConstantDeclaration) {
-				ConstantDeclaration constantDeclaration = (ConstantDeclaration) declaration;
+			if (declaration instanceof ConstantDeclaration constantDeclaration) {
 				return evaluateBoolean(constantDeclaration.getExpression());
 			}
-			if (declaration instanceof ParameterDeclaration) {
-				ParameterDeclaration parameterDeclaration = (ParameterDeclaration) declaration;
+			if (declaration instanceof ParameterDeclaration parameterDeclaration) {
 				Expression argument = evaluateParameter(parameterDeclaration);
 				return evaluateBoolean(argument);
 			}
@@ -495,13 +497,11 @@ public class ExpressionEvaluator {
 				throw new IllegalArgumentException("Not transformable expression: " + expression);
 			}
 		}
-		if (expression instanceof FunctionAccessExpression) {
-			FunctionAccessExpression functionAccessExpression = (FunctionAccessExpression) expression;
+		if (expression instanceof FunctionAccessExpression functionAccessExpression) {
 			Expression inlinedLambaExpression = argumentInliner.createInlinedLambaExpression(functionAccessExpression);
 			return evaluateBoolean(inlinedLambaExpression);
 		}
-		if (expression instanceof IfThenElseExpression) {
-			IfThenElseExpression ifThenElseExpression = (IfThenElseExpression) expression;
+		if (expression instanceof IfThenElseExpression ifThenElseExpression) {
 			Expression condition = ifThenElseExpression.getCondition();
 			if (evaluateBoolean(condition)) {
 				return evaluateBoolean(

@@ -624,7 +624,7 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 	}
 	
 	public static Set<Component> getAllComponents(Package parentPackage) {
-		Set<Component> types = new HashSet<Component>();
+		Set<Component> types = new LinkedHashSet<Component>();
 		for (Package importedPackage : parentPackage.getImports()) {
 			for (Component importedComponent : importedPackage.getComponents()) {
 				types.add(importedComponent);
@@ -637,32 +637,30 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 	}
 	
 	public static Set<SynchronousComponent> getAllSynchronousComponents(Package parentPackage) {
-		Set<SynchronousComponent> types = new HashSet<SynchronousComponent>();
+		Set<SynchronousComponent> types = new LinkedHashSet<SynchronousComponent>();
 		for (Component component : getAllComponents(parentPackage)) {
-			if (component instanceof SynchronousComponent) {
-				types.add(
-						(SynchronousComponent) component);
+			if (component instanceof SynchronousComponent synchronousComponent) {
+				types.add(synchronousComponent);
 			}
 		}
 		return types;
 	}
 	
 	public static Set<AsynchronousComponent> getAllAsynchronousComponents(Package parentPackage) {
-		Set<AsynchronousComponent> types = new HashSet<AsynchronousComponent>();
+		Set<AsynchronousComponent> types = new LinkedHashSet<AsynchronousComponent>();
 		for (Component component : getAllComponents(parentPackage)) {
-			if (component instanceof AsynchronousComponent) {
-				types.add((AsynchronousComponent) component);
+			if (component instanceof AsynchronousComponent asynchronousComponent) {
+				types.add(asynchronousComponent);
 			}
 		}
 		return types;
 	}
 	
 	public static Set<StatechartDefinition> getAllStatechartComponents(Package parentPackage) {
-		Set<StatechartDefinition> types = new HashSet<StatechartDefinition>();
+		Set<StatechartDefinition> types = new LinkedHashSet<StatechartDefinition>();
 		for (Component component : getAllSynchronousComponents(parentPackage)) {
-			if (component instanceof StatechartDefinition) {
-				types.add(
-						(StatechartDefinition) component);
+			if (component instanceof StatechartDefinition statechart) {
+				types.add(statechart);
 			}
 		}
 		return types;
@@ -1783,6 +1781,32 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 		return events;
 	}
 	
+	public static List<Entry<Port, Event>> getTriggeringInputEvents(StatechartDefinition statechart) {
+		List<Entry<Port, Event>> events = new ArrayList<Entry<Port, Event>>();
+		
+		for (Transition transition : statechart.getTransitions()) {
+			events.addAll(
+					getTriggeringInputEvents(transition));
+		}
+		
+		return events;
+	}
+
+	private static List<Entry<Port, Event>> getTriggeringInputEvents(Transition transition) {
+		List<Entry<Port, Event>> events = new ArrayList<Entry<Port, Event>>();
+		
+		Trigger trigger = transition.getTrigger();
+		if (trigger != null) {
+			List<EventReference> eventReferences = ecoreUtil.getSelfAndAllContentsOfType(trigger, EventReference.class);
+			for (EventReference eventReference : eventReferences) {
+				events.addAll(
+						getInputEvents(eventReference));
+			}
+		}
+		
+		return events;
+	}
+	
 	public static List<Event> getInputEvents(Component component) {
 		return getInputEvents(
 				getAllPorts(component));
@@ -2094,6 +2118,9 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 		if (component instanceof AsynchronousAdapter adapter) {
 			return List.of(
 					adapter.getWrappedComponent());
+		}
+		if (component instanceof StatechartDefinition) {
+			return List.of();
 		}
 		throw new IllegalArgumentException("Not known type: " + component);
 	}
@@ -3271,7 +3298,7 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 	}
 	
 	public static Set<State> getPrecedingStates(StateNode node) {
-		Set<State> precedingStates = new HashSet<State>();
+		Set<State> precedingStates = new LinkedHashSet<State>();
 		for (Transition incomingTransition : getIncomingTransitions(node)) {
 			StateNode source = incomingTransition.getSourceState();
 			if (source instanceof State state) {
@@ -3286,7 +3313,7 @@ public class StatechartModelDerivedFeatures extends ActionModelDerivedFeatures {
 	}
 	
 	public static Set<State> getReachableStates(StateNode node) { // Same level
-		Set<State> reachableStates = new HashSet<State>();
+		Set<State> reachableStates = new LinkedHashSet<State>();
 		for (Transition outgoingTransition : getOutgoingTransitions(node)) {
 			StateNode target = outgoingTransition.getTargetState();
 			if (target instanceof State state) {

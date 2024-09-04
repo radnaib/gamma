@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018-2023 Contributors to the Gamma project
+ * Copyright (c) 2018-2024 Contributors to the Gamma project
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -18,6 +18,7 @@ import hu.bme.mit.gamma.statechart.composite.SimpleChannel
 import hu.bme.mit.gamma.statechart.composite.SynchronousComponentInstance
 import hu.bme.mit.gamma.statechart.composite.SynchronousCompositeComponent
 import hu.bme.mit.gamma.statechart.interface_.Package
+import hu.bme.mit.gamma.statechart.statechart.EntryState
 import hu.bme.mit.gamma.statechart.statechart.GuardEvaluation
 import hu.bme.mit.gamma.statechart.statechart.OrthogonalRegionSchedulingOrder
 import hu.bme.mit.gamma.statechart.statechart.Region
@@ -81,6 +82,7 @@ class SystemReducer implements Reducer {
 		// Region optimizing
 		val regionMatcher = Regions.Matcher.on(engine)
 		for (region : regionMatcher.allValuesOfregion) {
+			region.removeUnnecessaryStateNodes
 			region.removeUnnecessaryRegion
 		}
 		// In-state reduction
@@ -160,6 +162,18 @@ class SystemReducer implements Reducer {
 			info("Removing timeout declaration " + removableTimeout.name + " of " + 
 				removableTimeout.containingStatechart.name)
 			removableTimeout.remove
+		}
+	}
+	
+	private def void removeUnnecessaryStateNodes(Region region) {
+		val consideredStateNodes = region.stateNodes.reject(EntryState)
+		for (stateNode : consideredStateNodes) {
+			if (stateNode.allIncomingTransitions.empty) {
+				for (outgoingTransitions : stateNode.outgoingTransitions) {
+					outgoingTransitions.removeTransition
+				}
+				stateNode.remove
+			}
 		}
 	}
 	
@@ -244,9 +258,11 @@ class SystemReducer implements Reducer {
 				statechart.orthogonalRegionSchedulingOrder = OrthogonalRegionSchedulingOrder.SEQUENTIAL
 				info("Setting guard evaluation to on-the-fly and orthogonal region scheduling order to sequential")
 			}
-			//
-			if (statechart.hasContainerOfType(AsynchronousAdapter)) {
-				val adapter = statechart.getContainerOfType(AsynchronousAdapter)
+			
+			val _package = statechart.containingPackage
+			val adapters = _package.components.filter(AsynchronousAdapter)
+			val adapter = adapters.filter[it.wrappedComponent.type === statechart].head
+			if (adapter !== null) {
 				if (adapter.whenAnyRunOnce) { // A single event/trigger a time
 					// Transition priority if outgoing transitions are always disjoint
 					var areTriggersDisjoint = true
@@ -281,6 +297,12 @@ class SystemReducer implements Reducer {
 						info("Setting region scheduling order to top-down")
 					}
 				}
+			}
+			
+			if (statechart.transitionPriority != TransitionPriority.ORDER_BASED &&
+					statechart.allStateNodes.forall[it.outgoingTransitions.size < 2]) { // Every state has at most one outgoing transition
+				statechart.transitionPriority = TransitionPriority.ORDER_BASED
+				info("Setting transition priority to order-based")
 			}
 		}
 	}
