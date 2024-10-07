@@ -1,11 +1,11 @@
 /********************************************************************************
  * Copyright (c) 2023 Contributors to the Gamma project
- *
+ * 
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- *
+ * 
  * SPDX-License-Identifier: EPL-1.0
  ********************************************************************************/
 package hu.bme.mit.gamma.scxml.transformation
@@ -40,12 +40,18 @@ import static com.google.common.base.Preconditions.checkNotNull
 
 class StatechartTraceability {
 
+	// Reference to the composite transformation traceability model
+	protected final CompositeTraceability compositeTraceability
+
+	// URI of the root SCXML statechart model to transform
+	protected final String fileURI
+
 	// Root element of the atomic SCXML statechart model to transform.
-	protected final ScxmlScxmlType scxmlRoot
+	protected ScxmlScxmlType scxmlRoot
 	protected SynchronousStatechartDefinition statechart
 	protected AsynchronousAdapter adapter
 	protected ConstantDeclaration queueCapacity
-	
+
 	protected final Map<ScxmlParallelType, State> parallels = newHashMap
 	protected final Map<ScxmlStateType, State> states = newHashMap
 	protected final Map<ScxmlFinalType, State> finals = newHashMap
@@ -53,18 +59,18 @@ class StatechartTraceability {
 	protected final Map<ScxmlHistoryType, EntryState> historyStates = newHashMap
 	protected final Map<ScxmlTransitionType, Transition> transitions = newHashMap
 	protected final Set<Transition> initialTransitions = newHashSet
-	
+
 	protected final Map<ScxmlDataType, Declaration> dataElements = newHashMap
-	
+
 	// Works only if variables are globally unique and have a global scope
 	protected final Map<String, VariableDeclaration> variables = newHashMap
-	
+
 	// Internal mappings (internal to the statechart)
 	protected Port defaultPort
 	protected Interface defaultInterface
 	protected final Map<Interface, Port> defaultInterfacePorts = newHashMap
 	protected final Map<String, Port> ports = newHashMap
-	
+
 	// Global mappings (from composite traceability)
 	protected final Map<String, Interface> interfaces
 	protected final Map<Pair<Interface, String>, Event> internalEvents
@@ -72,16 +78,19 @@ class StatechartTraceability {
 	protected final Map<Pair<Interface, String>, Event> outEvents
 
 	protected final extension GammaEcoreUtil ecoreUtil = GammaEcoreUtil.INSTANCE
-	
+
 	// <scxml> - Synchronous Statechart Definition
-	new(ScxmlScxmlType scxmlRoot,
+	new(
+		CompositeTraceability compositeTraceability,
+		String rootFileURI,
 		Map<String, Interface> interfaces,
 		ConstantDeclaration queueCapacity,
 		Map<Pair<Interface, String>, Event> internalEvents,
 		Map<Pair<Interface, String>, Event> inEvents,
 		Map<Pair<Interface, String>, Event> outEvents
 	) {
-		this.scxmlRoot = scxmlRoot
+		this.compositeTraceability = compositeTraceability
+		this.fileURI = rootFileURI
 		this.interfaces = interfaces
 		this.queueCapacity = queueCapacity
 		this.internalEvents = internalEvents
@@ -92,19 +101,19 @@ class StatechartTraceability {
 	def getScxmlRoot() {
 		return scxmlRoot
 	}
-	
+
 	def getTypeName() {
 		return scxmlRoot.name
 	}
-	
+
 	def setAdapter(AsynchronousAdapter adapter) {
 		this.adapter = adapter
 	}
-	
+
 	def getAdapter() {
 		return adapter
 	}
-	
+
 	def getQueueCapacityDeclaration() {
 		checkNotNull(queueCapacity)
 		return queueCapacity
@@ -240,7 +249,7 @@ class StatechartTraceability {
 		checkNotNull(gammaHistory)
 		return gammaHistory as StateNode
 	}
-	
+
 	// Retrieves the mapped Gamma StateNode for an arbitrary transition target state id
 	def getStateNodeById(String scxmlStateNodeId) {
 		val gammaState = states.entrySet.findFirst[entry|entry.key.id == scxmlStateNodeId]?.value
@@ -274,24 +283,24 @@ class StatechartTraceability {
 		checkNotNull(gammaTransition)
 		return gammaTransition
 	}
-	
+
 	// Transitions from initial states of Gamma compound states
 	// specified by scxml initial attributes or document order
 	def putInitialTransition(Transition gammaTransition) {
 		checkNotNull(gammaTransition)
 		initialTransitions += gammaTransition
 	}
-	
+
 	def getInitialTransitions() {
 		return initialTransitions
 	}
-	
+
 	// <data> - VariableDeclaration
 	def put(ScxmlDataType scxmlData, VariableDeclaration gammaDeclaration) {
 		checkNotNull(scxmlData)
 		checkNotNull(gammaDeclaration)
 		dataElements += scxmlData -> gammaDeclaration
-		
+
 		put(scxmlData.id, gammaDeclaration)
 	}
 
@@ -301,7 +310,7 @@ class StatechartTraceability {
 		checkNotNull(gammaDeclaration)
 		return gammaDeclaration
 	}
-	
+
 	// Variable Declarations by String identifier
 	private def put(String scxmlVariableName, VariableDeclaration gammaDeclaration) {
 		checkNotNull(scxmlVariableName)
@@ -315,66 +324,66 @@ class StatechartTraceability {
 		checkNotNull(gammaDeclaration)
 		return gammaDeclaration
 	}
-	
+
 	// Default port and interface (for event strings like 'event')
 	def getDefaultInterface() {
 		return defaultInterface
 	}
-	
+
 	def setDefaultInterface(Interface defaultInterface) {
 		this.defaultInterface = defaultInterface
 	}
-	
+
 	def getDefaultPort() {
 		return defaultPort
 	}
-	
+
 	def setDefaultPort(Port defaultPort) {
 		this.defaultPort = defaultPort
 	}
-	
+
 	// Default ports of interfaces (for event strings like 'interface.event')
 	def putDefaultInterfacePort(Interface gammaInterface, Port gammaPort) {
 		checkNotNull(gammaInterface)
 		checkNotNull(gammaPort)
 		defaultInterfacePorts += gammaInterface -> gammaPort
 	}
-	
+
 	def getDefaultInterfacePort(Interface gammaInterface) {
 		checkNotNull(gammaInterface)
 		val gammaPort = defaultInterfacePorts.get(gammaInterface)
 		checkNotNull(gammaPort)
 		return gammaPort
 	}
-	
+
 	def containsDefaultInterfacePort(Interface gammaInterface) {
 		checkNotNull(gammaInterface)
 		return defaultInterfacePorts.containsKey(gammaInterface)
 	}
-	
+
 	// Interfaces by string identifier (for event strings like '[port.]interface.event)
 	def putInterface(String scxmlInterfaceName, Interface gammaInterface) {
 		checkNotNull(scxmlInterfaceName)
 		checkNotNull(gammaInterface)
 		interfaces += scxmlInterfaceName -> gammaInterface
 	}
-	
+
 	def getInterface(String scxmlInterfaceName) {
 		checkNotNull(scxmlInterfaceName)
 		val gammaInterface = interfaces.get(scxmlInterfaceName)
 		checkNotNull(gammaInterface)
 		return gammaInterface
 	}
-	
+
 	def containsInterface(String scxmlInterfaceName) {
 		checkNotNull(scxmlInterfaceName)
 		return interfaces.containsKey(scxmlInterfaceName)
 	}
-	
+
 	def getInterfaces() {
 		return interfaces;
 	}
-	
+
 	def getAllInterfaces() {
 		var allInterfaces = interfaces.values.toList
 		allInterfaces += defaultInterfacePorts.keySet.toList
@@ -383,126 +392,126 @@ class StatechartTraceability {
 		}
 		return allInterfaces
 	}
-	
+
 	// Ports by string identifier (for event strings like 'port.interface.event)
 	def putPort(String scxmlPortName, Port gammaPort) {
 		checkNotNull(scxmlPortName)
 		checkNotNull(gammaPort)
 		ports += scxmlPortName -> gammaPort
 	}
-	
+
 	def getPort(String scxmlPortName) {
 		checkNotNull(scxmlPortName)
 		val gammaPort = ports.get(scxmlPortName)
 		checkNotNull(gammaPort)
 		return gammaPort
 	}
-	
+
 	def containsPort(String scxmlPortName) {
 		checkNotNull(scxmlPortName)
 		return ports.containsKey(scxmlPortName)
 	}
-	
+
 	// Internal events by pairs of {Gamma interface; event name}
 	def putInternalEvent(Pair<Interface, String> interfaceEvent, Event gammaEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
 		checkNotNull(gammaEvent)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		internalEvents += (interface -> eventName) -> gammaEvent
 	}
-	
+
 	def getInternalEvent(Pair<Interface, String> interfaceEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		val gammaEvent = internalEvents.get(interface -> eventName)
-		
+
 		checkNotNull(gammaEvent)
 		return gammaEvent
 	}
-	
+
 	def containsInternalEvent(Pair<Interface, String> interfaceEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		return internalEvents.containsKey(interface -> eventName)
 	}
-	
+
 	// Input events by pairs of {Gamma interface; event name}
 	def putInEvent(Pair<Interface, String> interfaceEvent, Event gammaEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
 		checkNotNull(gammaEvent)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		inEvents += (interface -> eventName) -> gammaEvent
 	}
-	
+
 	def getInEvent(Pair<Interface, String> interfaceEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		val gammaEvent = inEvents.get(interface -> eventName)
-		
+
 		checkNotNull(gammaEvent)
 		return gammaEvent
 	}
-	
+
 	def containsInEvent(Pair<Interface, String> interfaceEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		return inEvents.containsKey(interface -> eventName)
 	}
-	
+
 	// Output events by pairs of {port name; event name}
 	def putOutEvent(Pair<Interface, String> interfaceEvent, Event gammaEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
 		checkNotNull(gammaEvent)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		outEvents += (interface -> eventName) -> gammaEvent
 	}
-	
+
 	def getOutEvent(Pair<Interface, String> interfaceEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		val gammaEvent = outEvents.get(interface -> eventName)
-		
+
 		checkNotNull(gammaEvent)
 		return gammaEvent
 	}
-	
+
 	def containsOutEvent(Pair<Interface, String> interfaceEvent) {
 		checkNotNull(interfaceEvent)
 		checkNotNull(interfaceEvent.key)
 		checkNotNull(interfaceEvent.value)
-		
+
 		val interface = interfaceEvent.key
 		val eventName = interfaceEvent.value
 		return outEvents.containsKey(interface -> eventName)
