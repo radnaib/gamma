@@ -87,11 +87,13 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 
 	// TODO This will be the execute() method, combine with former statechart transformer execute()
 	protected def AsynchronousComponent execute() {
-		initQueueCapacity
+
+		// Put statechart traceability in composite traceability object
+		compositeTraceability.putTraceability(traceability.fileURI, traceability)
 
 		// TODO Check if not already transformed (at caller side or in this transformation method)
 		val fileURI = traceability.fileURI
-		val scxmlRoot = loadSubcomponent(fileURI)
+		scxmlRoot = loadSubcomponent(fileURI)
 		traceability.scxmlRoot = scxmlRoot
 
 		gammaStatechart = createSynchronousStatechartDefinition => [
@@ -132,18 +134,6 @@ class ScxmlToGammaStatechartTransformer extends AtomicElementTransformer {
 
 		val scxmlRoot = ecoreUtil.getFirstOfAllContentsOfType(documentRoot, ScxmlScxmlType);
 		return scxmlRoot
-	}
-
-	private def initQueueCapacity() {
-		// Define default queue capacity
-		val queueCapacityDeclaration = createConstantDeclaration
-		queueCapacityDeclaration.name = "QUEUE_CAPACITY"
-
-		val capacity = expressionUtil.toIntegerLiteral(4)
-		queueCapacityDeclaration.expression = capacity
-		queueCapacityDeclaration.type = createIntegerTypeDefinition
-
-		compositeTraceability.setQueueCapacity(queueCapacityDeclaration)
 	}
 
 	protected def transformStatechart(ScxmlScxmlType scxmlRoot) {

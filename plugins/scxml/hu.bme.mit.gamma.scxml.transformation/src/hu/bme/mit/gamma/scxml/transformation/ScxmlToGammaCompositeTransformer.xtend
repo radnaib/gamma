@@ -10,8 +10,6 @@
  ********************************************************************************/
 package hu.bme.mit.gamma.scxml.transformation
 
-import hu.bme.mit.gamma.statechart.interface_.Component
-
 class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 
 	// Root element of the SCXML statechart model to transform
@@ -28,6 +26,9 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 
 	// Entry point for the SCXML to Gamma hierarchical statechart transformation
 	def execute() {
+		// Initialize constants
+		initQueueCapacity
+		
 		val rootStatechartTraceability = compositeTraceability.createStatechartTraceability(rootFileURI)
 		
 		// Execute root statechart transformation.
@@ -36,5 +37,17 @@ class ScxmlToGammaCompositeTransformer extends CompositeElementTransformer {
 		rootStatechartTransformer.execute()
 
 		return compositeTraceability
+	}
+	
+	private def initQueueCapacity() {
+		// Define default queue capacity
+		val queueCapacityDeclaration = createConstantDeclaration
+		queueCapacityDeclaration.name = "QUEUE_CAPACITY"
+
+		val capacity = expressionUtil.toIntegerLiteral(4)
+		queueCapacityDeclaration.expression = capacity
+		queueCapacityDeclaration.type = createIntegerTypeDefinition
+
+		compositeTraceability.setQueueCapacity(queueCapacityDeclaration)
 	}
 }

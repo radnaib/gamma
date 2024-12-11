@@ -13,7 +13,6 @@ package hu.bme.mit.gamma.scxml.transformation
 import ac.soton.scxml.ScxmlInvokeType
 import ac.soton.scxml.ScxmlScxmlType
 import hu.bme.mit.gamma.expression.model.ConstantDeclaration
-import hu.bme.mit.gamma.statechart.composite.AsynchronousComponent
 import hu.bme.mit.gamma.statechart.composite.AsynchronousComponentInstance
 import hu.bme.mit.gamma.statechart.interface_.Component
 import hu.bme.mit.gamma.statechart.interface_.Event
@@ -51,7 +50,7 @@ class CompositeTraceability {
 	new(String rootFileURI) {
 		this.rootFileURI = rootFileURI
 	}
-	
+
 	// Creates a traceability object for the Gamma transformation of
 	// the SCXML statechart model found at rootFileURI.
 	def createStatechartTraceability(String rootFileURI) {
@@ -76,14 +75,14 @@ class CompositeTraceability {
 
 	def getRootComponent() {
 		val rootTraceability = getTraceability(rootFileURI)
-		
+
 		// TODO Which kind of root Gamma component should we return? statechart / adapter / other?
 		val rootComponent = rootTraceability.statechart
 		checkNotNull(rootComponent)
 		return rootComponent
 	}
 
-	def setRootComponent(AsynchronousComponent rootComponent) {
+	def setRootComponent(Component rootComponent) {
 		this.rootComponent = rootComponent
 	}
 
@@ -203,8 +202,9 @@ class CompositeTraceability {
 
 	def getComponents() {
 		val statechartTraceabilities = statecharts.values
-		return (instances.values.map[it.getType] + statechartTraceabilities.map[it.getAdapter] +
-			statechartTraceabilities.map[it.getStatechart]
+		return (instances.values.map[it.getType] + /* TODO Serialize async adapters */
+		/* statechartTraceabilities.map[it.getAdapter] + */
+		statechartTraceabilities.map[it.getStatechart]
 		).toSet
 	}
 }

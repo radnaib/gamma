@@ -72,10 +72,10 @@ public class CommandHandler extends AbstractHandler {
 						// package
 						List<Interface> gammaInterfaces = new ArrayList<Interface>(
 								compositeTraceability.getInterfaces());
-						Package gammaInterfacePackage = statechartUtil.wrapIntoPackage(gammaInterfaces.get(0));
+						gammaInterfaces.removeIf(i -> i == null);
 						ScxmlScxmlType scxmlRoot = compositeTraceability.getScxmlRoot();
-						gammaInterfacePackage.setName(Namings.getInterfacePackageName(scxmlRoot));
-						gammaInterfaces.remove(0);
+						Package gammaInterfacePackage = statechartUtil.createPackage(
+								Namings.getInterfacePackageName(scxmlRoot));
 						gammaInterfacePackage.getInterfaces().addAll(gammaInterfaces);
 
 						List<ConstantDeclaration> gammaConstants = new ArrayList<ConstantDeclaration>(
